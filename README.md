@@ -398,4 +398,3 @@ git status --short --ignored
 - `Content-Disposition` для кириллицы делается через ASCII fallback + `filename*=UTF-8''...`, иначе Starlette падает на latin-1.
 - `profile-title` отдаётся как `base64:<utf8 title>`, как ожидают клиенты.
 - Poisoning не удаляет ссылку сразу: ссылка живёт 31 день или до восстановления whitelist.
-
