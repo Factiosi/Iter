@@ -11,12 +11,21 @@ from app.models import (
     VPN_LINK_STATUS_POISONING,
 )
 
-def get_master_subscription_url(db: Session) -> str | None:
+def get_portal_settings(db: Session) -> PortalSettings | None:
     row = db.query(PortalSettings).filter(PortalSettings.id == 1).first()
     if row is None or not row.master_subscription_url:
         return None
     u = row.master_subscription_url.strip()
-    return u or None
+    if not u:
+        return None
+    return row
+
+
+def get_master_subscription_url(db: Session) -> str | None:
+    row = get_portal_settings(db)
+    if row is None:
+        return None
+    return row.master_subscription_url.strip()
 
 
 def purge_expired_poisoned(db: Session) -> None:

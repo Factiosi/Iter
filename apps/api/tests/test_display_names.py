@@ -33,3 +33,9 @@ def test_hongkong_collapse():
     nodes = [_n("🇭🇰 Гонконг, Гонконг, Extra")]
     normalize_server_names(nodes)
     assert nodes[0].name == "🇭🇰 Гонконг"
+
+
+def test_custom_name_rules_support_dollar_groups():
+    nodes = [_n("DE-01 → Blanc VPN")]
+    normalize_server_names(nodes, mode="custom", custom_rules=r"^([A-Z]{2})-\d+.* => $1 custom")
+    assert nodes[0].name == "DE custom"

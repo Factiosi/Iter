@@ -63,7 +63,13 @@ class GuestVpnLinkOut(BaseModel):
 
 class MasterSubscriptionResponse(BaseModel):
     master_subscription_url: str | None
+    server_name_mode: str = "blanc"
+    server_name_rules: str = ""
+    output_format_mode: str = "auto"
 
 
 class MasterSubscriptionUpdate(BaseModel):
     master_subscription_url: HttpUrl
+    server_name_mode: str = Field(default="blanc", min_length=3, max_length=32)
+    server_name_rules: str = ""
+    output_format_mode: str = Field(default="auto", min_length=4, max_length=32)

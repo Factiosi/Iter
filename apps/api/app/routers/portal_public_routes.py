@@ -15,7 +15,7 @@ from app.services.vpn_public import (
     find_guest_by_slug,
     find_main_by_localpart,
     find_main_by_slug,
-    get_master_subscription_url,
+    get_portal_settings,
     purge_expired_poisoned,
     record_successful_config_fetch,
 )
@@ -31,8 +31,8 @@ def _serve_subscription(
     request: Request,
     row: UserMainVpnLink | GuestVpnLink,
 ) -> Response:
-    master = get_master_subscription_url(db)
-    if not master:
+    portal_settings = get_portal_settings(db)
+    if portal_settings is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Мастер-ссылка подписки не настроена. Обратитесь к администратору.",
@@ -40,7 +40,14 @@ def _serve_subscription(
     poison = row.vpn_link_status == VPN_LINK_STATUS_POISONING
     ua = request.headers.get("user-agent")
     try:
-        media_type, body, headers = build_subscription_response(master, ua, poison)
+        media_type, body, headers = build_subscription_response(
+            portal_settings.master_subscription_url or "",
+            ua,
+            poison,
+            name_mode=portal_settings.server_name_mode or "blanc",
+            name_rules=portal_settings.server_name_rules or "",
+            output_format_mode=portal_settings.output_format_mode or "auto",
+        )
     except Exception:
         logger.exception("subscription pipeline failed")
         raise HTTPException(

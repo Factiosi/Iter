@@ -150,6 +150,9 @@ export type GuestVpnLinkOut = {
 
 export type MasterSubscriptionResponse = {
   master_subscription_url: string | null;
+  server_name_mode: string;
+  server_name_rules: string;
+  output_format_mode: string;
 };
 
 /** Сохранённые основные ссылки VPN (если уже создавались). 404 → null. */
@@ -233,10 +236,13 @@ export async function fetchMasterSubscription(): Promise<MasterSubscriptionRespo
   return res.json();
 }
 
-export async function patchMasterSubscription(url: string): Promise<MasterSubscriptionResponse> {
+export async function patchMasterSubscription(
+  url: string,
+  settings: Pick<MasterSubscriptionResponse, 'server_name_mode' | 'server_name_rules' | 'output_format_mode'>,
+): Promise<MasterSubscriptionResponse> {
   const res = await apiFetch('/api/admin/master-subscription', {
     method: 'PATCH',
-    body: JSON.stringify({ master_subscription_url: url }),
+    body: JSON.stringify({ master_subscription_url: url, ...settings }),
   });
   return res.json();
 }

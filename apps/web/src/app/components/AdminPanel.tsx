@@ -22,6 +22,17 @@ import {
 
 /** Роли, доступные для строк whitelist (Dominus только у владельца портала, не из этого списка) */
 const WHITELIST_ROLES = ['user', 'moderator'] as const;
+const SERVER_NAME_MODES = [
+  { value: 'blanc', label: 'Blanc preset' },
+  { value: 'custom', label: 'Свои regex-правила' },
+  { value: 'none', label: 'Не менять имена' },
+] as const;
+const OUTPUT_FORMAT_MODES = [
+  { value: 'auto', label: 'Авто по User-Agent' },
+  { value: 'force_happ', label: 'Всегда Happ/base64 URI' },
+  { value: 'force_flclash', label: 'Всегда FlClash YAML' },
+  { value: 'force_throne', label: 'Всегда Throne/base64 URI' },
+] as const;
 type SortKey = 'email' | 'config_fetch_count' | 'role';
 type SortDirection = 'asc' | 'desc';
 
@@ -41,6 +52,9 @@ export function AdminPanel() {
   const [savingEmail, setSavingEmail] = useState<string | null>(null);
   const [masterDraft, setMasterDraft] = useState('');
   const [masterSaved, setMasterSaved] = useState<string | null>(null);
+  const [serverNameMode, setServerNameMode] = useState('blanc');
+  const [serverNameRules, setServerNameRules] = useState('');
+  const [outputFormatMode, setOutputFormatMode] = useState('auto');
   const [masterLoading, setMasterLoading] = useState(true);
   const [masterSaving, setMasterSaving] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('email');
@@ -90,6 +104,9 @@ export function AdminPanel() {
           const u = m.master_subscription_url ?? '';
           setMasterSaved(u || null);
           setMasterDraft(u);
+          setServerNameMode(m.server_name_mode || 'blanc');
+          setServerNameRules(m.server_name_rules || '');
+          setOutputFormatMode(m.output_format_mode || 'auto');
         }
       } catch (err) {
         if (!cancelled) {
@@ -112,10 +129,17 @@ export function AdminPanel() {
     }
     setMasterSaving(true);
     try {
-      const m = await patchMasterSubscription(url);
+      const m = await patchMasterSubscription(url, {
+        server_name_mode: serverNameMode,
+        server_name_rules: serverNameRules,
+        output_format_mode: outputFormatMode,
+      });
       const u = m.master_subscription_url ?? '';
       setMasterSaved(u || null);
       setMasterDraft(u);
+      setServerNameMode(m.server_name_mode || 'blanc');
+      setServerNameRules(m.server_name_rules || '');
+      setOutputFormatMode(m.output_format_mode || 'auto');
       toast.success('Мастер-ссылка сохранена');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Не удалось сохранить');
@@ -201,6 +225,61 @@ export function AdminPanel() {
                 placeholder="https://…"
                 className="w-full px-4 py-2 bg-[var(--input-background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--ring)] font-mono text-sm"
               />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                    Имена серверов
+                  </span>
+                  <Select value={serverNameMode} onValueChange={setServerNameMode}>
+                    <SelectTrigger className="h-10 rounded-lg border-[var(--border)] bg-[var(--input-background)] text-[var(--foreground)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]">
+                      {SERVER_NAME_MODES.map((mode) => (
+                        <SelectItem key={mode.value} value={mode.value}>
+                          {mode.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                    Формат выдачи
+                  </span>
+                  <Select value={outputFormatMode} onValueChange={setOutputFormatMode}>
+                    <SelectTrigger className="h-10 rounded-lg border-[var(--border)] bg-[var(--input-background)] text-[var(--foreground)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]">
+                      {OUTPUT_FORMAT_MODES.map((mode) => (
+                        <SelectItem key={mode.value} value={mode.value}>
+                          {mode.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+              </div>
+              {serverNameMode === 'custom' && (
+                <label className="block space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                    Regex-правила переименования
+                  </span>
+                  <textarea
+                    value={serverNameRules}
+                    onChange={(e) => setServerNameRules(e.target.value)}
+                    rows={5}
+                    spellCheck={false}
+                    placeholder={'^🇩🇪.* => 🇩🇪 Германия\n^(.+?) → Blanc VPN$ => $1'}
+                    className="w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--input-background)] px-4 py-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                  />
+                  <span className="block text-xs leading-relaxed text-[var(--muted-foreground)]">
+                    Формат: один regex на строку, затем `=&gt;`, затем новое имя. Пример:
+                    `^(.+?) → Blanc VPN$ =&gt; $1`. Если правило не совпало, имя остаётся как в мастер-ссылке.
+                  </span>
+                </label>
+              )}
               <AppPrimaryButton
                 type="button"
                 disabled={masterSaving}

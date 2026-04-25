@@ -57,9 +57,19 @@ def migrate_sqlite_schema() -> None:
                 "CREATE TABLE IF NOT EXISTS portal_settings ("
                 "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
                 "master_subscription_url TEXT, "
+                "server_name_mode VARCHAR(32) NOT NULL DEFAULT 'blanc', "
+                "server_name_rules TEXT NOT NULL DEFAULT '', "
+                "output_format_mode VARCHAR(32) NOT NULL DEFAULT 'auto', "
                 "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
             )
         )
+        col = _sqlite_columns(conn, "portal_settings")
+        if "server_name_mode" not in col:
+            _add_col(conn, "portal_settings", "server_name_mode VARCHAR(32) NOT NULL DEFAULT 'blanc'")
+        if "server_name_rules" not in col:
+            _add_col(conn, "portal_settings", "server_name_rules TEXT NOT NULL DEFAULT ''")
+        if "output_format_mode" not in col:
+            _add_col(conn, "portal_settings", "output_format_mode VARCHAR(32) NOT NULL DEFAULT 'auto'")
         n = conn.execute(text("SELECT COUNT(*) FROM portal_settings")).scalar()
         if n == 0:
             conn.execute(text("INSERT INTO portal_settings (id, master_subscription_url) VALUES (1, NULL)"))

@@ -27,6 +27,9 @@ class PortalSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     master_subscription_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    server_name_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="blanc")
+    server_name_rules: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    output_format_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="auto")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

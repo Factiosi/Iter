@@ -28,6 +28,8 @@ from app.schemas import (
     WhitelistRow,
 )
 from app.services.vpn_public import restore_access, start_poisoning
+from app.subscription.display_names import VALID_NAME_MODES, normalize_server_names
+from app.subscription.ua import VALID_OUTPUT_FORMAT_MODES
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +145,12 @@ def remove_whitelist(
 def get_master_subscription(_admin: dict = Depends(require_admin), db: Session = Depends(get_db)):
     s = db.query(PortalSettings).filter(PortalSettings.id == 1).first()
     url = (s.master_subscription_url or "").strip() if s else ""
-    return MasterSubscriptionResponse(master_subscription_url=url or None)
+    return MasterSubscriptionResponse(
+        master_subscription_url=url or None,
+        server_name_mode=(s.server_name_mode if s else "blanc") or "blanc",
+        server_name_rules=(s.server_name_rules if s else "") or "",
+        output_format_mode=(s.output_format_mode if s else "auto") or "auto",
+    )
 
 
 @router.patch("/master-subscription", response_model=MasterSubscriptionResponse)
@@ -153,18 +160,43 @@ def patch_master_subscription(
     db: Session = Depends(get_db),
 ):
     raw = str(body.master_subscription_url).strip()
+    server_name_mode = body.server_name_mode.strip().lower()
+    output_format_mode = body.output_format_mode.strip().lower()
+    server_name_rules = body.server_name_rules.strip()
+    if server_name_mode not in VALID_NAME_MODES:
+        raise HTTPException(status_code=400, detail="Неизвестный режим переименования серверов")
+    if output_format_mode not in VALID_OUTPUT_FORMAT_MODES:
+        raise HTTPException(status_code=400, detail="Неизвестный режим выдачи подписки")
+    try:
+        normalize_server_names([], mode=server_name_mode, custom_rules=server_name_rules)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
     s = db.query(PortalSettings).filter(PortalSettings.id == 1).first()
     if s is None:
-        s = PortalSettings(id=1, master_subscription_url=raw)
+        s = PortalSettings(
+            id=1,
+            master_subscription_url=raw,
+            server_name_mode=server_name_mode,
+            server_name_rules=server_name_rules,
+            output_format_mode=output_format_mode,
+        )
         db.add(s)
     else:
         s.master_subscription_url = raw
+        s.server_name_mode = server_name_mode
+        s.server_name_rules = server_name_rules
+        s.output_format_mode = output_format_mode
         db.add(s)
     db.commit()
     db.refresh(s)
     logger.info("Master subscription URL updated")
-    return MasterSubscriptionResponse(master_subscription_url=(s.master_subscription_url or "").strip() or None)
+    return MasterSubscriptionResponse(
+        master_subscription_url=(s.master_subscription_url or "").strip() or None,
+        server_name_mode=s.server_name_mode or "blanc",
+        server_name_rules=s.server_name_rules or "",
+        output_format_mode=s.output_format_mode or "auto",
+    )
 
 
 @router.patch("/whitelist/role", response_model=WhitelistRow)

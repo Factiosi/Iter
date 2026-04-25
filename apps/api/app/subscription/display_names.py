@@ -5,6 +5,11 @@ from collections import defaultdict
 
 from app.subscription.nodes import ProxyNode
 
+NAME_MODE_BLANC = "blanc"
+NAME_MODE_CUSTOM = "custom"
+NAME_MODE_NONE = "none"
+VALID_NAME_MODES = frozenset({NAME_MODE_BLANC, NAME_MODE_CUSTOM, NAME_MODE_NONE})
+
 _FLAG_START = re.compile(r"^([\U0001F1E6-\U0001F1FF]{2})\s*")
 _PARENS = re.compile(r"\([^)]*\)")
 _WHITELIST_HASH = re.compile(r"Whitelist#\d+", re.IGNORECASE)
@@ -67,11 +72,45 @@ def _canonical_name_for_proxy(name: str) -> str:
     return _canonical_extra_line(raw)
 
 
-def normalize_server_names(nodes: list[ProxyNode]) -> None:
-    """Нормализация отображаемых имён (план §4b): правит node.name на месте."""
+def _parse_custom_rules(rules_text: str) -> list[tuple[re.Pattern[str], str]]:
+    rules: list[tuple[re.Pattern[str], str]] = []
+    for raw_line in rules_text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=>" not in line:
+            raise ValueError(f"Некорректное правило имени сервера: {line}")
+        pattern, replacement = [p.strip() for p in line.split("=>", 1)]
+        if not pattern:
+            raise ValueError(f"Пустой regex в правиле имени сервера: {line}")
+        replacement = re.sub(r"\$(\d+)", r"\\\1", replacement)
+        rules.append((re.compile(pattern), replacement))
+    return rules
+
+
+def _custom_name_for_proxy(name: str, rules: list[tuple[re.Pattern[str], str]]) -> str:
+    raw = name.strip()
+    for pattern, replacement in rules:
+        if pattern.search(raw):
+            return pattern.sub(replacement, raw).strip()
+    return raw
+
+
+def normalize_server_names(
+    nodes: list[ProxyNode],
+    *,
+    mode: str = NAME_MODE_BLANC,
+    custom_rules: str = "",
+) -> None:
+    """Нормализация отображаемых имён; правит node.name на месте."""
+    mode = mode if mode in VALID_NAME_MODES else NAME_MODE_BLANC
+    if mode == NAME_MODE_NONE:
+        return
+
+    parsed_rules = _parse_custom_rules(custom_rules) if mode == NAME_MODE_CUSTOM else []
     keys: list[str | None] = []
     for n in nodes:
-        c = _canonical_name_for_proxy(n.name)
+        c = _custom_name_for_proxy(n.name, parsed_rules) if mode == NAME_MODE_CUSTOM else _canonical_name_for_proxy(n.name)
         keys.append(c if c else None)
 
     groups: dict[str, list[int]] = defaultdict(list)

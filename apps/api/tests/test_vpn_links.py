@@ -1,7 +1,7 @@
 from app.routers.vpn_routes import _main_payload
 from app.subscription.out_headers import build_subscription_headers
 from app.subscription.poison import apply_poisoning
-from app.subscription.ua import FORMAT_FLCLASH, FORMAT_HAPP
+from app.subscription.ua import FORMAT_FLCLASH, FORMAT_HAPP, FORMAT_THRONE, resolve_output_format
 from app.subscription.nodes import ProxyNode
 
 
@@ -32,3 +32,8 @@ def test_poisoning_sets_broken_uuid_port_and_name():
     assert all(n.uuid == "66666666-6666-6666-6666-666666666666" for n in poisoned)
     assert poisoned[0].name == "Не доступен #1"
     assert poisoned[1].name == "Не доступен #2"
+
+
+def test_output_format_can_be_forced_for_subscription_delivery():
+    assert resolve_output_format("Happ/3.15.2/Android/1733565", "force_flclash") == FORMAT_FLCLASH
+    assert resolve_output_format("FlClash/1.0", "force_throne") == FORMAT_THRONE
