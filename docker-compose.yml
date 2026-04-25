@@ -4,10 +4,10 @@
 services:
   api:
     build:
-      context: ./api
+      context: ./apps/api
       dockerfile: Dockerfile
     volumes:
-      - ./api/data:/app/data
+      - ./apps/api/data:/app/data
     env_file:
       - .env
     environment:
@@ -18,7 +18,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: web/Dockerfile
+      dockerfile: apps/web/Dockerfile
       args:
         VITE_API_BASE: ""
     ports:

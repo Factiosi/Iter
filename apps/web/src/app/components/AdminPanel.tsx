@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { FeatherIcon } from '@/icons/feather';
 import { AppPrimaryButton } from './AppPrimaryButton';
@@ -22,9 +22,16 @@ import {
 
 /** Роли, доступные для строк whitelist (Dominus только у владельца портала, не из этого списка) */
 const WHITELIST_ROLES = ['user', 'moderator'] as const;
+type SortKey = 'email' | 'config_fetch_count' | 'role';
+type SortDirection = 'asc' | 'desc';
 
 function configFetchCountLabel(count: number | null): string {
   return count == null ? 'Не активен' : String(count);
+}
+
+function sortArrow(key: SortKey, sortKey: SortKey, direction: SortDirection): string {
+  if (key !== sortKey) return '';
+  return direction === 'asc' ? ' ↑' : ' ↓';
 }
 
 export function AdminPanel() {
@@ -36,6 +43,26 @@ export function AdminPanel() {
   const [masterSaved, setMasterSaved] = useState<string | null>(null);
   const [masterLoading, setMasterLoading] = useState(true);
   const [masterSaving, setMasterSaving] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('email');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const sortedRows = useMemo(() => {
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      if (sortKey === 'config_fetch_count') {
+        const av = a.config_fetch_count ?? -1;
+        const bv = b.config_fetch_count ?? -1;
+        if (av !== bv) return (av - bv) * dir;
+      } else if (sortKey === 'role') {
+        const cmp = roleLabel(a.role).localeCompare(roleLabel(b.role), 'ru');
+        if (cmp !== 0) return cmp * dir;
+      } else {
+        const cmp = a.email.localeCompare(b.email, 'ru');
+        if (cmp !== 0) return cmp * dir;
+      }
+      return a.id - b.id;
+    });
+  }, [rows, sortDirection, sortKey]);
 
   const load = async () => {
     setLoading(true);
@@ -134,6 +161,15 @@ export function AdminPanel() {
     }
   };
 
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection('asc');
+  };
+
   return (
     <div className="h-full p-6 lg:p-8">
       <div className="max-w-3xl mx-auto space-y-6">
@@ -206,19 +242,40 @@ export function AdminPanel() {
                   Нет разрешённых адресов
                 </p>
               ) : (
-                rows.map((row) => (
-                  <div
-                    key={row.id}
-                    className="grid gap-3 p-3 bg-[var(--background)] rounded-lg border border-[var(--border)] sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-center"
-                  >
-                    <span className="font-mono text-sm break-all min-w-0">{row.email}</span>
-                    <div>
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
-                        Кол-во обновлений
+                <>
+                  <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_10rem_11rem_2.5rem] items-center gap-2 px-3 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                    <button
+                      type="button"
+                      onClick={() => handleSort('email')}
+                      className="text-left transition-colors hover:text-[var(--foreground)]"
+                    >
+                      Email{sortArrow('email', sortKey, sortDirection)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSort('config_fetch_count')}
+                      className="text-left transition-colors hover:text-[var(--foreground)]"
+                    >
+                      Кол-во обновлений{sortArrow('config_fetch_count', sortKey, sortDirection)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSort('role')}
+                      className="text-left transition-colors hover:text-[var(--foreground)]"
+                    >
+                      Роль{sortArrow('role', sortKey, sortDirection)}
+                    </button>
+                    <span aria-hidden="true" />
+                  </div>
+                  {sortedRows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="grid gap-3 p-3 bg-[var(--background)] rounded-lg border border-[var(--border)] sm:grid-cols-[minmax(0,1fr)_10rem_11rem_2.5rem] sm:items-center"
+                    >
+                      <span className="font-mono text-sm break-all min-w-0">{row.email}</span>
+                      <div className="text-sm font-medium">
+                        {configFetchCountLabel(row.config_fetch_count)}
                       </div>
-                      <div className="text-sm font-medium">{configFetchCountLabel(row.config_fetch_count)}</div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 sm:justify-end">
                       <Select
                         value={row.role}
                         onValueChange={(role) => void handleRoleChange(row.email, role)}
@@ -245,14 +302,14 @@ export function AdminPanel() {
                       <button
                         type="button"
                         onClick={() => void handleRemoveEmail(row.email)}
-                        className="p-2 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
+                        className="p-2 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0 sm:justify-self-end"
                         aria-label="Удалить"
                       >
                         <FeatherIcon name="trash-2" size={16} className="text-red-600" />
                       </button>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </>
               )}
             </div>
           )}

@@ -1,4 +1,4 @@
-"""Из sources/Iter.Factiosi_icon_and_avatar.png делает PNG для сайта (web/public) и почты (sources)."""
+"""Генерирует favicon/app icons из assets/brand/app-icon.png."""
 
 from __future__ import annotations
 
@@ -7,8 +7,9 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "sources" / "Iter.Factiosi_icon_and_avatar.png"
-PUBLIC = ROOT / "web" / "public"
+BRAND = ROOT / "assets" / "brand"
+SRC = BRAND / "app-icon.png"
+PUBLIC = ROOT / "apps" / "web" / "public"
 
 
 def main() -> None:
@@ -28,8 +29,8 @@ def main() -> None:
     save(PUBLIC / "apple-touch-icon.png", 180)
     save(PUBLIC / "icon-192.png", 192)
     save(PUBLIC / "icon-512.png", 512)
-    save(ROOT / "sources" / "Iter.Factiosi_mail_avatar_512.png", 512)
-    print("Written:", PUBLIC, "+ sources/Iter.Factiosi_mail_avatar_512.png")
+    save(BRAND / "mail-avatar-512.png", 512)
+    print("Written:", PUBLIC, "+ assets/brand/mail-avatar-512.png")
 
 
 if __name__ == "__main__":

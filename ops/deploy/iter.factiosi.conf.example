@@ -6,7 +6,7 @@
 # на каждый сервис (как здесь — только iter), чтобы правки не мешали другим сайтам.
 #
 # VirtualHost: iter.factiosi.com (DNS + Let's Encrypt).
-# Прокси на единый uvicorn (API + статика): 127.0.0.1:8010
+# Прокси на Docker web-контейнер: 127.0.0.1:8011
 #
 # Сертификат: certbot certonly -d iter.factiosi.com (webroot /var/www/certbot)
 
@@ -41,7 +41,7 @@ server {
     add_header Content-Security-Policy "upgrade-insecure-requests" always;
 
     location / {
-        proxy_pass http://127.0.0.1:8010;
+        proxy_pass http://127.0.0.1:8011;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

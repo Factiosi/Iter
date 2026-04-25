@@ -1,14 +1,14 @@
 #!/bin/bash
 # Запускать на сервере с правами root:
-#   sudo bash ~/iter-portal/deploy/install-iter-https.sh
+#   sudo bash ~/iter-portal/ops/deploy/install-iter-https.sh
 #
-# Делает: webroot для certbot, vhost в sites-available/iter.factiosi (server_name iter.factiosi.com) → 127.0.0.1:8010,
+# Делает: webroot для certbot, vhost в sites-available/iter.factiosi (server_name iter.factiosi.com) → Docker web на 127.0.0.1:8011,
 # выпускает сертификат Let's Encrypt, включает HTTPS.
 
 set -euo pipefail
 
 EMAIL="${CERTBOT_EMAIL:-factiosi@gmail.com}"
-UPSTREAM="${ITER_UPSTREAM:-127.0.0.1:8010}"
+UPSTREAM="${ITER_UPSTREAM:-127.0.0.1:8011}"
 WEBROOT="/var/www/certbot"
 CONF="/etc/nginx/sites-available/iter.factiosi"
 

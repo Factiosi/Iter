@@ -52,7 +52,7 @@ export default defineConfig(({ mode }) => {
   return {
     server: {
       fs: {
-        allow: [path.resolve(__dirname, '..')],
+        allow: [path.resolve(__dirname, '../..')],
       },
       proxy: {
         '/api': {
@@ -81,7 +81,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        '@sources': path.resolve(__dirname, '../sources'),
+        '@brand': path.resolve(__dirname, '../../assets/brand'),
       },
     },
 

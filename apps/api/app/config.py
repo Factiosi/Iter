@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     #: Временно для наполнения: любая почта, без проверки кода; админ — по ADMIN_EMAIL
     dev_relaxed_auth: bool = True
 
-    #: Абсолютный или относительный путь к `web/dist` после `vite build`; пусто — не раздавать SPA из API.
+    #: Абсолютный или относительный путь к собранному SPA; в Docker пусто, статику отдаёт web-контейнер.
     static_dist_dir: str = ""
 
     @property

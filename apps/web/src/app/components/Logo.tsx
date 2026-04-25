@@ -1,5 +1,5 @@
-import logoLight from '@sources/Iter.Factiosi_light.png';
-import logoDark from '@sources/Iter.Factiosi_dark.png';
+import logoLight from '@brand/logo-light.png';
+import logoDark from '@brand/logo-dark.png';
 
 type LogoProps = {
   /** Сайдбар: компактный блок; auth — экран входа */

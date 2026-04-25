@@ -1,10 +1,10 @@
-# Секреты окружения (корень — для docker compose; api/.env — для локального uvicorn)
+# Секреты окружения (корень — для docker compose; apps/api/.env — для локального uvicorn)
 .env
-api/.env
-api/.venv/
-api/data/
-web/node_modules/
-web/dist/
+apps/api/.env
+apps/api/.venv/
+apps/api/data/
+apps/web/node_modules/
+apps/web/dist/
 __pycache__/
 *.py[cod]
 .pytest_cache/
