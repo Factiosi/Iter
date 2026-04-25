@@ -1,0 +1,263 @@
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { FeatherIcon } from '@/icons/feather';
+import { AppPrimaryButton } from './AppPrimaryButton';
+import {
+  addWhitelistEmail,
+  fetchMasterSubscription,
+  fetchWhitelist,
+  patchMasterSubscription,
+  patchWhitelistRole,
+  removeWhitelistEmail,
+  type WhitelistRow,
+} from '@/lib/api';
+import { roleLabel } from '@/lib/roleLabels';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select';
+
+/** Роли, доступные для строк whitelist (Dominus только у владельца портала, не из этого списка) */
+const WHITELIST_ROLES = ['user', 'moderator'] as const;
+
+function configFetchCountLabel(count: number | null): string {
+  return count == null ? 'Не активен' : String(count);
+}
+
+export function AdminPanel() {
+  const [rows, setRows] = useState<WhitelistRow[]>([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [savingEmail, setSavingEmail] = useState<string | null>(null);
+  const [masterDraft, setMasterDraft] = useState('');
+  const [masterSaved, setMasterSaved] = useState<string | null>(null);
+  const [masterLoading, setMasterLoading] = useState(true);
+  const [masterSaving, setMasterSaving] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchWhitelist();
+      setRows(data);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось загрузить список');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setMasterLoading(true);
+      try {
+        const m = await fetchMasterSubscription();
+        if (!cancelled) {
+          const u = m.master_subscription_url ?? '';
+          setMasterSaved(u || null);
+          setMasterDraft(u);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          toast.error(err instanceof Error ? err.message : 'Не удалось загрузить мастер-ссылку');
+        }
+      } finally {
+        if (!cancelled) setMasterLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSaveMaster = async () => {
+    const url = masterDraft.trim();
+    if (!url) {
+      toast.error('Введите URL');
+      return;
+    }
+    setMasterSaving(true);
+    try {
+      const m = await patchMasterSubscription(url);
+      const u = m.master_subscription_url ?? '';
+      setMasterSaved(u || null);
+      setMasterDraft(u);
+      toast.success('Мастер-ссылка сохранена');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось сохранить');
+    } finally {
+      setMasterSaving(false);
+    }
+  };
+
+  const handleAddEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const em = newEmail.trim();
+    if (!em) return;
+    try {
+      const row = await addWhitelistEmail(em);
+      setRows((prev) => [...prev, row].sort((a, b) => a.id - b.id));
+      setNewEmail('');
+      toast.success('Добавлено');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось добавить');
+    }
+  };
+
+  const handleRemoveEmail = async (email: string) => {
+    try {
+      await removeWhitelistEmail(email);
+      setRows((prev) => prev.filter((r) => r.email !== email));
+      toast.success('Удалено');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось удалить');
+    }
+  };
+
+  const handleRoleChange = async (email: string, role: string) => {
+    setSavingEmail(email);
+    try {
+      const updated = await patchWhitelistRole(email, role);
+      setRows((prev) => prev.map((r) => (r.email === email ? updated : r)));
+      toast.success('Роль обновлена');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось сменить роль');
+    } finally {
+      setSavingEmail(null);
+    }
+  };
+
+  return (
+    <div className="h-full p-6 lg:p-8">
+      <div className="max-w-3xl mx-auto space-y-6">
+        <h1>Администрирование</h1>
+
+        <div className="p-4 lg:p-6 bg-[var(--accordion-bg)] rounded-lg border border-[var(--border)] space-y-4">
+          <h2 className="text-lg font-semibold">Мастер-ссылка подписки</h2>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Единый источник VLESS/Clash для всех пользователей. Изменения не применяются, пока вы не
+            нажмёте «Сохранить».
+          </p>
+          {masterLoading ? (
+            <p className="text-sm text-[var(--muted-foreground)]">Загрузка…</p>
+          ) : (
+            <>
+              {masterSaved ? (
+                <p className="text-xs font-mono break-all text-[var(--muted-foreground)]">
+                  Текущая: {masterSaved}
+                </p>
+              ) : (
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                  Не задана — публичная выдача подписки вернёт ошибку.
+                </p>
+              )}
+              <input
+                type="url"
+                value={masterDraft}
+                onChange={(e) => setMasterDraft(e.target.value)}
+                placeholder="https://…"
+                className="w-full px-4 py-2 bg-[var(--input-background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--ring)] font-mono text-sm"
+              />
+              <AppPrimaryButton
+                type="button"
+                disabled={masterSaving}
+                onClick={() => void handleSaveMaster()}
+                className="w-full sm:w-auto"
+              >
+                <FeatherIcon name="check" size={20} className="text-[var(--foreground)]" />
+                {masterSaving ? 'Сохранение…' : 'Сохранить'}
+              </AppPrimaryButton>
+            </>
+          )}
+        </div>
+
+        <div className="p-4 lg:p-6 bg-[var(--accordion-bg)] rounded-lg border border-[var(--border)]">
+          <h2 className="mb-4">Добавить email</h2>
+          <form onSubmit={handleAddEmail} className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="new@example.com"
+              className="flex-1 px-4 py-2 bg-[var(--input-background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+            />
+            <AppPrimaryButton type="submit" className="shrink-0 whitespace-nowrap">
+              <FeatherIcon name="plus" size={20} className="text-[var(--foreground)]" />
+              <span>Добавить</span>
+            </AppPrimaryButton>
+          </form>
+        </div>
+
+        <div className="p-4 lg:p-6 bg-[var(--accordion-bg)] rounded-lg border border-[var(--border)]">
+          <h2 className="mb-4">Разрешённые email ({rows.length})</h2>
+          {loading ? (
+            <p className="text-[var(--muted-foreground)] text-sm text-center py-8">Загрузка…</p>
+          ) : (
+            <div className="space-y-2">
+              {rows.length === 0 ? (
+                <p className="text-[var(--muted-foreground)] text-sm text-center py-8">
+                  Нет разрешённых адресов
+                </p>
+              ) : (
+                rows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="grid gap-3 p-3 bg-[var(--background)] rounded-lg border border-[var(--border)] sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-center"
+                  >
+                    <span className="font-mono text-sm break-all min-w-0">{row.email}</span>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
+                        Кол-во обновлений
+                      </div>
+                      <div className="text-sm font-medium">{configFetchCountLabel(row.config_fetch_count)}</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 sm:justify-end">
+                      <Select
+                        value={row.role}
+                        onValueChange={(role) => void handleRoleChange(row.email, role)}
+                        disabled={savingEmail === row.email}
+                      >
+                        <SelectTrigger
+                          className="h-10 min-w-[11rem] rounded-lg border-[var(--border)] bg-[var(--input-background)] text-[var(--foreground)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/40"
+                          aria-label="Роль"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]">
+                          {WHITELIST_ROLES.map((r) => (
+                            <SelectItem
+                              key={r}
+                              value={r}
+                              className="rounded-md focus:bg-[var(--muted)] focus:text-[var(--foreground)]"
+                            >
+                              {roleLabel(r)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveEmail(row.email)}
+                        className="p-2 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
+                        aria-label="Удалить"
+                      >
+                        <FeatherIcon name="trash-2" size={16} className="text-red-600" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

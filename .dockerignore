@@ -1,0 +1,12 @@
+.git
+iter-docker-upload.tar.gz
+api/.venv
+api/data
+api/.env
+api/__pycache__
+api/.pytest_cache
+web/node_modules
+web/dist
+web/.env
+**/__pycache__
+**/*.pyc

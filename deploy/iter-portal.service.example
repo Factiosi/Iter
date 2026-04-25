@@ -1,0 +1,27 @@
+# Установка на VPS (один uvicorn за nginx):
+#   sudo cp deploy/iter-portal.service.example /etc/systemd/system/iter-portal.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now iter-portal
+#
+# Перезапуск после правок кода или .env:
+#   sudo systemctl restart iter-portal
+#
+# Логи:
+#   journalctl -u iter-portal -f
+
+[Unit]
+Description=Iter.Factiosi Portal (uvicorn, API + SPA)
+After=network.target
+
+[Service]
+Type=simple
+User=factiosi
+Group=factiosi
+WorkingDirectory=/home/factiosi/iter-portal/api
+EnvironmentFile=/home/factiosi/iter-portal/api/.env
+ExecStart=/home/factiosi/iter-portal/api/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8010
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

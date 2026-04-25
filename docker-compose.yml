@@ -1,0 +1,28 @@
+# Итерация «Iter» на сервере: API + фронт за nginx в образе web.
+# Секреты только в .env (не коммитить). Пример переменных: .env.example
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    volumes:
+      - ./api/data:/app/data
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:////app/data/iter.db
+      STATIC_DIST_DIR: ""
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        VITE_API_BASE: ""
+    ports:
+      - "127.0.0.1:${ITER_HTTP_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped

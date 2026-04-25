@@ -1,0 +1,52 @@
+# Имя на сервере: /etc/nginx/sites-available/iter.factiosi
+# Включить: ln -sf /etc/nginx/sites-available/iter.factiosi /etc/nginx/sites-enabled/iter.factiosi
+#
+# Несколько поддоменов: в одном .conf можно перечислить несколько блоков server { } с разными
+# server_name и сертификатами — nginx это поддерживает. Часто удобнее держать отдельный файл
+# на каждый сервис (как здесь — только iter), чтобы правки не мешали другим сайтам.
+#
+# VirtualHost: iter.factiosi.com (DNS + Let's Encrypt).
+# Прокси на единый uvicorn (API + статика): 127.0.0.1:8010
+#
+# Сертификат: certbot certonly -d iter.factiosi.com (webroot /var/www/certbot)
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name iter.factiosi.com;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name iter.factiosi.com;
+
+    ssl_certificate /etc/letsencrypt/live/iter.factiosi.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/iter.factiosi.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # Смешанный контент: браузер поднимает http-подресурсы до https (и блокирует то, что не удалось).
+    add_header Content-Security-Policy "upgrade-insecure-requests" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:8010;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+}
