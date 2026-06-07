@@ -70,6 +70,10 @@ def migrate_sqlite_schema() -> None:
             _add_col(conn, "portal_settings", "server_name_rules TEXT NOT NULL DEFAULT ''")
         if "output_format_mode" not in col:
             _add_col(conn, "portal_settings", "output_format_mode VARCHAR(32) NOT NULL DEFAULT 'auto'")
+        if "server_name_slots" not in col:
+            _add_col(conn, "portal_settings", "server_name_slots TEXT NOT NULL DEFAULT '{}'")
+        if "bypass_render_mode" not in col:
+            _add_col(conn, "portal_settings", "bypass_render_mode VARCHAR(16) NOT NULL DEFAULT 'socks'")
         n = conn.execute(text("SELECT COUNT(*) FROM portal_settings")).scalar()
         if n == 0:
             conn.execute(text("INSERT INTO portal_settings (id, master_subscription_url) VALUES (1, NULL)"))

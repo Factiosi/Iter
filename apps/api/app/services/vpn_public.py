@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -10,6 +11,8 @@ from app.models import (
     VPN_LINK_STATUS_ACTIVE,
     VPN_LINK_STATUS_POISONING,
 )
+from app.subscription.server_slots import ServerSlotState, dump_slot_state, parse_slot_state
+
 
 def get_portal_settings(db: Session) -> PortalSettings | None:
     row = db.query(PortalSettings).filter(PortalSettings.id == 1).first()
@@ -21,11 +24,13 @@ def get_portal_settings(db: Session) -> PortalSettings | None:
     return row
 
 
-def get_master_subscription_url(db: Session) -> str | None:
-    row = get_portal_settings(db)
-    if row is None:
-        return None
-    return row.master_subscription_url.strip()
+def load_server_name_slots(settings: PortalSettings) -> ServerSlotState:
+    return parse_slot_state(settings.server_name_slots)
+
+
+def save_server_name_slots(db: Session, settings: PortalSettings, state: ServerSlotState) -> None:
+    settings.server_name_slots = dump_slot_state(state)
+    db.add(settings)
 
 
 def purge_expired_poisoned(db: Session) -> None:

@@ -10,8 +10,8 @@ README написан для себя, не для публичного GitHub. 
 
 Мастер-подписка берётся из админки. Сейчас исторически использовалась Blanc VPN master link, которая нормально отдаёт тело только под Happ, поэтому сервер сам ходит к мастер-ссылке фиксированным Android Happ User-Agent, парсит VLESS-ноды и затем рендерит ответ под клиентский User-Agent:
 
-- Happ: base64 bundle из VLESS URI.
-- Throne: base64 bundle из VLESS URI, с явным `type=tcp` для TCP.
+- Happ: при LIBERTY master — полный JSON с routing/dialerProxy; иначе base64 bundle из VLESS URI.
+- Throne: при LIBERTY master — sing-box JSON outbounds; иначе base64 bundle из VLESS URI (`type=tcp` для TCP).
 - FlClash: Clash YAML с группой `Iter VPN` и правилом `MATCH,Iter VPN`.
 
 Из апстрим-заголовков намеренно не прокидываются `support-url`, `subscription-userinfo`, `announce` и похожая лишняя информация. Портал сам выставляет `profile-title`, `Content-Disposition`, `Cache-Control` и базовые безопасные заголовки.
@@ -35,8 +35,9 @@ README написан для себя, не для публичного GitHub. 
 ├── assets/
 │   └── brand/               # исходники бренда и логотипов
 ├── ops/
-│   └── deploy/              # deploy docs, env template, host nginx example
-├── scripts/                 # repo-level helper scripts
+│   ├── deploy/              # деплой Iter, nginx example, TLS
+│   └── corpvpn/             # sidecar CORP VPN (не в docker-compose)
+├── scripts/                 # deploy-iter.ps1, generate_brand_pngs.py
 ├── docker-compose.yml       # production stack: api + web
 └── .env.example             # root env template for Docker Compose
 ```
@@ -45,7 +46,8 @@ README написан для себя, не для публичного GitHub. 
 
 - `apps/api` и `apps/web` отделяют два приложения от инфраструктуры.
 - `assets/brand` хранит исходные изображения не внутри фронта, потому что они используются и для сайта, и для писем/иконок.
-- `ops/deploy` хранит только эксплуатационные вещи. Старые systemd/uvicorn-only файлы удалены после перехода на Docker.
+- `ops/deploy` — только Iter Portal (Docker, nginx, TLS).
+- `ops/corpvpn` — отдельный прокси CORP VPN; общий код подписки, но не часть портала.
 - Runtime-данные (`apps/api/data/iter.db`, `.env`) не коммитятся.
 
 ## Backend
@@ -141,9 +143,25 @@ apps/api/data/iter.db
 
 `server_name_mode`:
 
-- `blanc` - текущий встроенный preset под Blanc VPN. Убирает `Extra`, схлопывает дубли стран, отдельно обрабатывает `Whitelist`.
+- `blanc` - встроенный preset под Blanc VPN. Убирает `Extra`, схлопывает дубли стран, отдельно обрабатывает `Whitelist`.
+- `liberty` - preset под LIBERTY master: bypass/gaming/whitelist, стабильные `#N` через `server_name_slots`.
 - `custom` - применяет regex-правила из textarea.
 - `none` - не меняет имена серверов из master subscription.
+
+`server_name_slots` (JSON в `portal_settings`): карта слотов `#N` для стабильных имён при ротации IP у провайдера. Обновляется при успешной выдаче подписки (не в poisoning).
+
+`bypass_render_mode` (nonHapp — Throne/FlClash при LIBERTY bypass-узлах):
+
+- `both` — транзитный SOCKS + VLESS Bypass в одной подписке.
+- `socks` — только транзитный SOCKS.
+- `chain` — только VLESS Bypass через транзит.
+
+Имена bypass-пары:
+
+- Exit VLESS: `{флаг exit} {страна} Bypass #N` (например `🇩🇪 Германия Bypass #1`).
+- Транзит SOCKS: `{флаг транзита} Узел "{страна exit} Bypass #N"` — в кавычках имя exit-сервера, к которому относится узел (например `🇳🇱 Узел "Германия Bypass #1"`).
+
+SOCKS в sing-box получает `udp_over_tcp` — часть транзитов не отдаёт UDP-associate.
 
 Формат custom-правил:
 
@@ -165,7 +183,7 @@ regex => replacement
 - `auto` - текущая логика: Happ/Throne/FlClash по User-Agent.
 - `force_happ` - всегда Happ/base64 URI bundle.
 - `force_flclash` - всегда Clash YAML.
-- `force_throne` - всегда Throne/base64 URI bundle.
+- `force_throne` - всегда Throne (sing-box JSON при LIBERTY master, иначе base64 URI bundle).
 
 Обычный режим прода - `auto`. Принудительные режимы нужны для отладки или если новая master-ссылка/клиент ведут себя неожиданно.
 
@@ -267,7 +285,15 @@ systemctl is-active docker
 
 ### Обычный деплой
 
-Локально собрать архив без runtime-мусора, залить, распаковать, пересобрать:
+Автоматизация (после первого ручного прогона):
+
+```powershell
+.\scripts\deploy-iter.ps1
+.\scripts\deploy-iter.ps1 -SkipTests
+.\scripts\deploy-iter.ps1 -DryRun
+```
+
+Ручной вариант — локально собрать архив без runtime-мусора, залить, распаковать, пересобрать:
 
 ```powershell
 tar -czf .\iter-docker-upload.tar.gz `
@@ -284,7 +310,7 @@ tar -czf .\iter-docker-upload.tar.gz `
 scp .\iter-docker-upload.tar.gz factiosi:~/iter-docker-upload.tar.gz
 ```
 
-На сервере:
+На сервере (или `bash ops/deploy/deploy-iter-remote.sh` после распаковки архива):
 
 ```bash
 cd ~/iter-portal
@@ -361,6 +387,10 @@ npm run dev
 
 В dev Vite проксирует API на `http://127.0.0.1:8010` по умолчанию. Переопределяется через `VITE_API_PROXY`.
 
+## CORP VPN (отдельно от портала)
+
+Sidecar в `ops/corpvpn/` — четыре статических URL подписки без БД и JWT. Подробности: [`ops/corpvpn/README.md`](ops/corpvpn/README.md).
+
 ## Git / private repo
 
 Проект приватный, лицензия не нужна. В git не должны попадать:
@@ -392,7 +422,7 @@ git status --short --ignored
 - Сначала сайт работал как host nginx -> standalone uvicorn на `127.0.0.1:8010`.
 - Потом переведён на Docker: host nginx -> Docker web на `127.0.0.1:8011` -> Docker api.
 - Master subscription fetch всегда идёт с Android Happ UA, потому что Blanc master link стабильно отдаёт именно такой формат.
-- Happ и Throne получают base64 URI bundle. FlClash получает Clash YAML.
+- При LIBERTY master: Happ — JSON с routing; Throne — sing-box outbounds; FlClash — Clash YAML. Иначе Happ/Throne — base64 URI bundle.
 - FlClash deeplink должен быть `clash://install-config?url=<config_url>`, не `flash://`.
 - Happ deeplink должен быть `happ://add/<config_url>`.
 - `Content-Disposition` для кириллицы делается через ASCII fallback + `filename*=UTF-8''...`, иначе Starlette падает на latin-1.

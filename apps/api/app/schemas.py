@@ -66,6 +66,7 @@ class MasterSubscriptionResponse(BaseModel):
     server_name_mode: str = "blanc"
     server_name_rules: str = ""
     output_format_mode: str = "auto"
+    bypass_render_mode: str = "socks"
 
 
 class MasterSubscriptionUpdate(BaseModel):
@@ -73,3 +74,4 @@ class MasterSubscriptionUpdate(BaseModel):
     server_name_mode: str = Field(default="blanc", min_length=3, max_length=32)
     server_name_rules: str = ""
     output_format_mode: str = Field(default="auto", min_length=4, max_length=32)
+    bypass_render_mode: str = Field(default="socks", min_length=4, max_length=16)

@@ -24,6 +24,7 @@ import {
 const WHITELIST_ROLES = ['user', 'moderator'] as const;
 const SERVER_NAME_MODES = [
   { value: 'blanc', label: 'Blanc preset' },
+  { value: 'liberty', label: 'LIBERTY preset' },
   { value: 'custom', label: 'Свои regex-правила' },
   { value: 'none', label: 'Не менять имена' },
 ] as const;
@@ -31,7 +32,15 @@ const OUTPUT_FORMAT_MODES = [
   { value: 'auto', label: 'Авто по User-Agent' },
   { value: 'force_happ', label: 'Всегда Happ/base64 URI' },
   { value: 'force_flclash', label: 'Всегда FlClash YAML' },
-  { value: 'force_throne', label: 'Всегда Throne/base64 URI' },
+  {
+    value: 'force_throne',
+    label: 'Всегда Throne (sing-box JSON при LIBERTY, иначе base64)',
+  },
+] as const;
+const BYPASS_RENDER_MODES = [
+  { value: 'both', label: 'SOCKS + [chain]' },
+  { value: 'socks', label: 'Только SOCKS' },
+  { value: 'chain', label: 'Только VLESS [chain]' },
 ] as const;
 type SortKey = 'email' | 'config_fetch_count' | 'role';
 type SortDirection = 'asc' | 'desc';
@@ -55,6 +64,7 @@ export function AdminPanel() {
   const [serverNameMode, setServerNameMode] = useState('blanc');
   const [serverNameRules, setServerNameRules] = useState('');
   const [outputFormatMode, setOutputFormatMode] = useState('auto');
+  const [bypassRenderMode, setBypassRenderMode] = useState('both');
   const [masterLoading, setMasterLoading] = useState(true);
   const [masterSaving, setMasterSaving] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('email');
@@ -107,6 +117,7 @@ export function AdminPanel() {
           setServerNameMode(m.server_name_mode || 'blanc');
           setServerNameRules(m.server_name_rules || '');
           setOutputFormatMode(m.output_format_mode || 'auto');
+          setBypassRenderMode(m.bypass_render_mode || 'socks');
         }
       } catch (err) {
         if (!cancelled) {
@@ -133,6 +144,7 @@ export function AdminPanel() {
         server_name_mode: serverNameMode,
         server_name_rules: serverNameRules,
         output_format_mode: outputFormatMode,
+        bypass_render_mode: bypassRenderMode,
       });
       const u = m.master_subscription_url ?? '';
       setMasterSaved(u || null);
@@ -140,6 +152,7 @@ export function AdminPanel() {
       setServerNameMode(m.server_name_mode || 'blanc');
       setServerNameRules(m.server_name_rules || '');
       setOutputFormatMode(m.output_format_mode || 'auto');
+      setBypassRenderMode(m.bypass_render_mode || 'socks');
       toast.success('Мастер-ссылка сохранена');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Не удалось сохранить');
@@ -225,7 +238,7 @@ export function AdminPanel() {
                 placeholder="https://…"
                 className="w-full px-4 py-2 bg-[var(--input-background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--ring)] font-mono text-sm"
               />
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="space-y-2">
                   <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
                     Имена серверов
@@ -253,6 +266,23 @@ export function AdminPanel() {
                     </SelectTrigger>
                     <SelectContent className="rounded-lg border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]">
                       {OUTPUT_FORMAT_MODES.map((mode) => (
+                        <SelectItem key={mode.value} value={mode.value}>
+                          {mode.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                    Bypass для nonHapp
+                  </span>
+                  <Select value={bypassRenderMode} onValueChange={setBypassRenderMode}>
+                    <SelectTrigger className="h-10 rounded-lg border-[var(--border)] bg-[var(--input-background)] text-[var(--foreground)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]">
+                      {BYPASS_RENDER_MODES.map((mode) => (
                         <SelectItem key={mode.value} value={mode.value}>
                           {mode.label}
                         </SelectItem>

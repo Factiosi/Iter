@@ -12,3 +12,5 @@ __pycache__/
 *.tmp
 *.bak
 *.tar.gz
+scripts/*ssh*
+iter-docker-upload.tar.gz

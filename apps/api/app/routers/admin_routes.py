@@ -29,6 +29,7 @@ from app.schemas import (
 )
 from app.services.vpn_public import restore_access, start_poisoning
 from app.subscription.display_names import VALID_NAME_MODES, normalize_server_names
+from app.subscription.render import VALID_BYPASS_RENDER_MODES
 from app.subscription.ua import VALID_OUTPUT_FORMAT_MODES
 
 logger = logging.getLogger(__name__)
@@ -150,6 +151,7 @@ def get_master_subscription(_admin: dict = Depends(require_admin), db: Session =
         server_name_mode=(s.server_name_mode if s else "blanc") or "blanc",
         server_name_rules=(s.server_name_rules if s else "") or "",
         output_format_mode=(s.output_format_mode if s else "auto") or "auto",
+        bypass_render_mode=(s.bypass_render_mode if s else "socks") or "socks",
     )
 
 
@@ -162,11 +164,14 @@ def patch_master_subscription(
     raw = str(body.master_subscription_url).strip()
     server_name_mode = body.server_name_mode.strip().lower()
     output_format_mode = body.output_format_mode.strip().lower()
+    bypass_render_mode = body.bypass_render_mode.strip().lower()
     server_name_rules = body.server_name_rules.strip()
     if server_name_mode not in VALID_NAME_MODES:
         raise HTTPException(status_code=400, detail="Неизвестный режим переименования серверов")
     if output_format_mode not in VALID_OUTPUT_FORMAT_MODES:
         raise HTTPException(status_code=400, detail="Неизвестный режим выдачи подписки")
+    if bypass_render_mode not in VALID_BYPASS_RENDER_MODES:
+        raise HTTPException(status_code=400, detail="Неизвестный режим bypass-рендера")
     try:
         normalize_server_names([], mode=server_name_mode, custom_rules=server_name_rules)
     except ValueError as exc:
@@ -180,6 +185,7 @@ def patch_master_subscription(
             server_name_mode=server_name_mode,
             server_name_rules=server_name_rules,
             output_format_mode=output_format_mode,
+            bypass_render_mode=bypass_render_mode,
         )
         db.add(s)
     else:
@@ -187,6 +193,7 @@ def patch_master_subscription(
         s.server_name_mode = server_name_mode
         s.server_name_rules = server_name_rules
         s.output_format_mode = output_format_mode
+        s.bypass_render_mode = bypass_render_mode
         db.add(s)
     db.commit()
     db.refresh(s)
@@ -196,6 +203,7 @@ def patch_master_subscription(
         server_name_mode=s.server_name_mode or "blanc",
         server_name_rules=s.server_name_rules or "",
         output_format_mode=s.output_format_mode or "auto",
+        bypass_render_mode=s.bypass_render_mode or "socks",
     )
 
 

@@ -6,12 +6,13 @@ from typing import Any
 
 @dataclass
 class ProxyNode:
-    """Узел VLESS для внутреннего представления (Clash YAML и/или URI)."""
+    """Узел прокси для внутреннего представления (Clash YAML и/или URI)."""
 
     name: str
     uuid: str
     server: str
     port: int
+    protocol: str = "vless"
     network: str = "tcp"
     tls: bool = False
     sni: str | None = None
@@ -23,4 +24,7 @@ class ProxyNode:
     sid: str | None = None
     fp: str | None = None
     flow: str | None = None
+    password: str | None = None
+    alpn: list[str] | None = None
+    skip_cert_verify: bool = False
     extra: dict[str, Any] = field(default_factory=dict)

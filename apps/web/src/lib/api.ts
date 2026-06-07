@@ -153,6 +153,7 @@ export type MasterSubscriptionResponse = {
   server_name_mode: string;
   server_name_rules: string;
   output_format_mode: string;
+  bypass_render_mode: string;
 };
 
 /** Сохранённые основные ссылки VPN (если уже создавались). 404 → null. */
@@ -238,7 +239,10 @@ export async function fetchMasterSubscription(): Promise<MasterSubscriptionRespo
 
 export async function patchMasterSubscription(
   url: string,
-  settings: Pick<MasterSubscriptionResponse, 'server_name_mode' | 'server_name_rules' | 'output_format_mode'>,
+  settings: Pick<
+    MasterSubscriptionResponse,
+    'server_name_mode' | 'server_name_rules' | 'output_format_mode' | 'bypass_render_mode'
+  >,
 ): Promise<MasterSubscriptionResponse> {
   const res = await apiFetch('/api/admin/master-subscription', {
     method: 'PATCH',

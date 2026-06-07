@@ -16,8 +16,10 @@ from app.services.vpn_public import (
     find_main_by_localpart,
     find_main_by_slug,
     get_portal_settings,
+    load_server_name_slots,
     purge_expired_poisoned,
     record_successful_config_fetch,
+    save_server_name_slots,
 )
 from app.models import GuestVpnLink, UserMainVpnLink, VPN_LINK_STATUS_POISONING
 
@@ -39,14 +41,17 @@ def _serve_subscription(
         )
     poison = row.vpn_link_status == VPN_LINK_STATUS_POISONING
     ua = request.headers.get("user-agent")
+    slot_state = load_server_name_slots(portal_settings)
     try:
-        media_type, body, headers = build_subscription_response(
+        media_type, body, headers, slot_state = build_subscription_response(
             portal_settings.master_subscription_url or "",
             ua,
             poison,
             name_mode=portal_settings.server_name_mode or "blanc",
             name_rules=portal_settings.server_name_rules or "",
             output_format_mode=portal_settings.output_format_mode or "auto",
+            bypass_render_mode=portal_settings.bypass_render_mode or "socks",
+            slot_state=slot_state,
         )
     except Exception:
         logger.exception("subscription pipeline failed")
@@ -59,6 +64,7 @@ def _serve_subscription(
     if poison:
         delete_after_poisoned_delivery(db, row)
     else:
+        save_server_name_slots(db, portal_settings, slot_state)
         db.commit()
 
     return Response(content=body.encode("utf-8"), media_type=media_type, headers=headers)

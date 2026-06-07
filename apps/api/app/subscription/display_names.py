@@ -4,11 +4,21 @@ import re
 from collections import defaultdict
 
 from app.subscription.nodes import ProxyNode
+from app.subscription.server_slots import (
+    ServerSlotState,
+    assign_group_slots,
+    next_free_slot,
+    node_identity,
+    prune_slot_state,
+    unique_identities_for_indices,
+)
+from app.subscription.server_slots import _FREED_SLOTS_KEY
 
 NAME_MODE_BLANC = "blanc"
+NAME_MODE_LIBERTY = "liberty"
 NAME_MODE_CUSTOM = "custom"
 NAME_MODE_NONE = "none"
-VALID_NAME_MODES = frozenset({NAME_MODE_BLANC, NAME_MODE_CUSTOM, NAME_MODE_NONE})
+VALID_NAME_MODES = frozenset({NAME_MODE_BLANC, NAME_MODE_LIBERTY, NAME_MODE_CUSTOM, NAME_MODE_NONE})
 
 _FLAG_START = re.compile(r"^([\U0001F1E6-\U0001F1FF]{2})\s*")
 _PARENS = re.compile(r"\([^)]*\)")
@@ -72,6 +82,39 @@ def _canonical_name_for_proxy(name: str) -> str:
     return _canonical_extra_line(raw)
 
 
+def _strip_liberty_marks(raw: str) -> tuple[str, str]:
+    m = _FLAG_START.match(raw.strip())
+    flag = m.group(1) if m else ""
+    body = raw[m.end() :] if m else raw
+    body = re.sub(r"\([^)]*\)", " ", body)
+    body = re.sub(r"\b(bypass|gaming)\b", " ", body, flags=re.IGNORECASE)
+    # Убираем декоративные эмодзи/иконки провайдера, оставляя буквы, цифры и дефисы.
+    body = re.sub(r"^[^\wА-Яа-яЁё]+", " ", body)
+    body = re.sub(r"[^\wА-Яа-яЁё\s-]+", " ", body)
+    body = re.sub(r"[-–]\s*\d+\s*$", "", body)
+    body = re.sub(r"\s+", " ", body).strip(" ,-")
+    return flag, body
+
+
+def _canonical_liberty_name_for_proxy(name: str) -> str:
+    raw = name.strip()
+    if not raw:
+        return ""
+    lower = raw.lower()
+    flag, country = _strip_liberty_marks(raw)
+    if not country:
+        return raw
+    if "бс" in lower:
+        return f"{flag} 🏳️ Whitelist, {country}".strip()
+    if "bypass" in lower:
+        return f"{flag} {country} Bypass".strip()
+    if "gaming" in lower:
+        return f"{flag} {country} Gaming".strip()
+    if "💳" in raw or "payment" in lower or "pay" in lower:
+        return f"{flag} {country} Payment".strip()
+    return f"{flag} {country}".strip()
+
+
 def _parse_custom_rules(rules_text: str) -> list[tuple[re.Pattern[str], str]]:
     rules: list[tuple[re.Pattern[str], str]] = []
     for raw_line in rules_text.splitlines():
@@ -101,16 +144,23 @@ def normalize_server_names(
     *,
     mode: str = NAME_MODE_BLANC,
     custom_rules: str = "",
-) -> None:
-    """Нормализация отображаемых имён; правит node.name на месте."""
+    slot_state: ServerSlotState | None = None,
+) -> ServerSlotState:
+    """Нормализация отображаемых имён; правит node.name на месте. Возвращает обновлённую карту слотов."""
+    state: ServerSlotState = dict(slot_state or {})
     mode = mode if mode in VALID_NAME_MODES else NAME_MODE_BLANC
     if mode == NAME_MODE_NONE:
-        return
+        return state
 
     parsed_rules = _parse_custom_rules(custom_rules) if mode == NAME_MODE_CUSTOM else []
     keys: list[str | None] = []
     for n in nodes:
-        c = _custom_name_for_proxy(n.name, parsed_rules) if mode == NAME_MODE_CUSTOM else _canonical_name_for_proxy(n.name)
+        if mode == NAME_MODE_CUSTOM:
+            c = _custom_name_for_proxy(n.name, parsed_rules)
+        elif mode == NAME_MODE_LIBERTY:
+            c = _canonical_liberty_name_for_proxy(n.name)
+        else:
+            c = _canonical_name_for_proxy(n.name)
         keys.append(c if c else None)
 
     groups: dict[str, list[int]] = defaultdict(list)
@@ -120,8 +170,25 @@ def normalize_server_names(
 
     for k, idxs in groups.items():
         idxs_sorted = sorted(idxs)
+        identities = unique_identities_for_indices(nodes, idxs_sorted)
         if len(idxs_sorted) == 1:
-            nodes[idxs_sorted[0]].name = k
-        else:
-            for num, idx in enumerate(idxs_sorted, start=1):
-                nodes[idx].name = f"{k} #{num}"
+            ident = identities[0]
+            prev_map = state.get(k, {})
+            prev_slots = {key: val for key, val in prev_map.items() if key != _FREED_SLOTS_KEY}
+            group_slots = assign_group_slots(prev_map, identities)
+            state[k] = group_slots
+            slot = group_slots[ident]
+            # Один сервер: без # только если это единственный слот #1 с нуля; иначе сохраняем #N.
+            nodes[idxs_sorted[0]].name = (
+                k if slot == 1 and ident not in prev_slots else f"{k} #{slot}"
+            )
+            continue
+
+        group_slots = assign_group_slots(state.get(k, {}), identities)
+        state[k] = group_slots
+        used_slots: set[int] = set()
+        for idx, ident in zip(idxs_sorted, identities):
+            slot = next_free_slot(group_slots[ident], used_slots)
+            nodes[idx].name = f"{k} #{slot}"
+
+    return prune_slot_state(state, set(groups.keys()))
