@@ -289,7 +289,13 @@ systemctl is-active docker
 
 ```powershell
 .\scripts\deploy-iter.ps1
-.\scripts\deploy-iter.ps1 -SkipTests
+```
+
+Интерактивно спросит: pytest, api/web/full, dry-run, SSH-хост. Без вопросов:
+
+```powershell
+.\scripts\deploy-iter.ps1 -NonInteractive
+.\scripts\deploy-iter.ps1 -SkipTests -BuildScope api
 .\scripts\deploy-iter.ps1 -DryRun
 ```
 
