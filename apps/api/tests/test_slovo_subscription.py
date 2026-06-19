@@ -128,6 +128,7 @@ def test_slovo_happ_uses_iter_route_deeplink_and_strips_node_routing():
             poisoning=False,
             name_mode="slovo",
             slovo_ru_direct_routes_override=["domain:2ip.ru", "domain:afisha.ru"],
+            happ_routing_direct_sites=["domain:2ip.ru", "domain:afisha.ru"],
         )
 
     data = json.loads(content)

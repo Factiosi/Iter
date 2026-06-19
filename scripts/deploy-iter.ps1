@@ -84,6 +84,29 @@ function Read-Option {
     return $Choices[$DefaultIndex]
 }
 
+function Get-DockerDeploySteps([string]$Scope) {
+    switch ($Scope) {
+        "api" {
+            return @(
+                "docker compose build api"
+                "docker compose up -d api"
+            )
+        }
+        "web" {
+            return @(
+                "docker compose build web"
+                "docker compose up -d web"
+            )
+        }
+        default {
+            return @(
+                "docker compose build"
+                "docker compose up -d"
+            )
+        }
+    }
+}
+
 function Get-BuildScopeLabel([string]$Scope) {
     switch ($Scope) {
         "api" { return "api only" }
