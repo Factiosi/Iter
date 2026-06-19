@@ -28,6 +28,17 @@ def _resolve_bypass_render_mode(mode: str) -> str:
     return mode if mode in VALID_BYPASS_RENDER_MODES else BYPASS_RENDER_SOCKS
 
 
+def throne_needs_clash_yaml(nodes: list[ProxyNode]) -> bool:
+    """Throne: xhttp и post-quantum encryption — через Clash YAML → Xray VLESS."""
+    for n in nodes:
+        if (n.network or "").lower() == "xhttp":
+            return True
+        enc = str(n.extra.get("encryption") or "").strip().lower()
+        if enc and enc != "none":
+            return True
+    return False
+
+
 _COUNTRY_BY_ISO2: dict[str, tuple[str, str]] = {
     "ca": ("🇨🇦", "Канада"),
     "ch": ("🇨🇭", "Швейцария"),
@@ -217,6 +228,9 @@ def _node_to_clash_proxy(n: ProxyNode, *, dial_tag: str | None = None) -> dict[s
         "encryption": "",
         "packet-encoding": "xudp",
     }
+    enc = str(n.extra.get("encryption") or "").strip()
+    if enc.lower() not in ("", "none"):
+        p["encryption"] = enc
     if n.flow:
         p["flow"] = n.flow
 
@@ -321,6 +335,19 @@ def _xhttp_extra_to_mihomo(extra: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _build_singbox_xhttp_transport(n: ProxyNode) -> dict[str, Any]:
+    transport: dict[str, Any] = {"type": "xhttp", "path": n.path or "/"}
+    if n.host:
+        transport["host"] = n.host
+    mode = n.extra.get("mode")
+    if mode:
+        transport["mode"] = str(mode)
+    xhttp_extra = n.extra.get("_xhttp_extra")
+    if isinstance(xhttp_extra, dict) and xhttp_extra:
+        transport["extra"] = dict(xhttp_extra)
+    return transport
+
+
 def render_clash_yaml(
     nodes: list[ProxyNode],
     *,
@@ -415,13 +442,7 @@ def _node_to_singbox_outbound(n: ProxyNode, *, dial_tag: str | None = None) -> d
             transport["headers"] = {"Host": n.host}
         out["transport"] = transport
     elif network == "xhttp":
-        transport = {"type": "xhttp", "path": n.path or "/"}
-        if n.host:
-            transport["host"] = n.host
-        mode = n.extra.get("mode")
-        if mode:
-            transport["mode"] = str(mode)
-        out["transport"] = transport
+        out["transport"] = _build_singbox_xhttp_transport(n)
 
     if n.tls or n.pbk or n.sid:
         tls: dict[str, Any] = {"enabled": True}
@@ -441,6 +462,8 @@ def _node_to_singbox_outbound(n: ProxyNode, *, dial_tag: str | None = None) -> d
         alpn = n.extra.get("alpn")
         if alpn:
             tls["alpn"] = [part.strip() for part in str(alpn).split(",") if part.strip()]
+        elif network == "xhttp":
+            tls["alpn"] = ["h2"]
         out["tls"] = tls
 
     if dial_tag:
@@ -458,8 +481,6 @@ def render_singbox_outbounds_json(
     transit_registry = _BypassTransitRegistry()
     dial_seen: set[str] = set()
     for n in nodes:
-        if (n.network or "").lower() == "xhttp":
-            continue
         if n.extra.get("_dialer_socks"):
             if mode in {BYPASS_RENDER_CHAIN, BYPASS_RENDER_BOTH}:
                 _append_bypass_chain_outbounds(outbounds, n, transit_registry, dial_seen)
@@ -472,7 +493,8 @@ def render_singbox_outbounds_json(
 
 
 def _node_to_vless_uri(n: ProxyNode) -> str:
-    q: dict[str, str] = {"encryption": "none"}
+    enc = str(n.extra.get("encryption") or "").strip()
+    q: dict[str, str] = {"encryption": enc if enc and enc.lower() != "none" else "none"}
     if n.network:
         q["type"] = n.network
     if n.flow:
@@ -507,8 +529,9 @@ def _node_to_vless_uri(n: ProxyNode) -> str:
         mode = n.extra.get("mode")
         if mode:
             q["mode"] = str(mode)
+        q.setdefault("alpn", "h2")
     for key, value in n.extra.items():
-        if key.startswith("_"):
+        if key.startswith("_") or key == "encryption":
             continue
         if value is None or str(value) == "":
             continue

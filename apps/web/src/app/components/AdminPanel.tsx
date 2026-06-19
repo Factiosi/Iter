@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { FeatherIcon } from '@/icons/feather';
 import { AppPrimaryButton } from './AppPrimaryButton';
+import { Checkbox } from './ui/checkbox';
 import {
   addWhitelistEmail,
   fetchMasterSubscription,
@@ -25,6 +26,7 @@ const WHITELIST_ROLES = ['user', 'moderator'] as const;
 const SERVER_NAME_MODES = [
   { value: 'blanc', label: 'Blanc preset' },
   { value: 'liberty', label: 'LIBERTY preset' },
+  { value: 'slovo', label: 'Slovo VPN preset' },
   { value: 'custom', label: 'Свои regex-правила' },
   { value: 'none', label: 'Не менять имена' },
 ] as const;
@@ -42,6 +44,8 @@ const BYPASS_RENDER_MODES = [
   { value: 'socks', label: 'Только SOCKS' },
   { value: 'chain', label: 'Только VLESS [chain]' },
 ] as const;
+const SLOVO_RU_DIRECT_ROUTE_PREFIXES =
+  'domain:, full:, geosite:, regexp:, keyword:, suffix:';
 type SortKey = 'email' | 'config_fetch_count' | 'role';
 type SortDirection = 'asc' | 'desc';
 
@@ -65,6 +69,9 @@ export function AdminPanel() {
   const [serverNameRules, setServerNameRules] = useState('');
   const [outputFormatMode, setOutputFormatMode] = useState('auto');
   const [bypassRenderMode, setBypassRenderMode] = useState('both');
+  const [slovoRuDirectOverride, setSlovoRuDirectOverride] = useState(false);
+  const [slovoRuDirectRoutes, setSlovoRuDirectRoutes] = useState('');
+  const [slovoRuDirectProviderPreview, setSlovoRuDirectProviderPreview] = useState('');
   const [masterLoading, setMasterLoading] = useState(true);
   const [masterSaving, setMasterSaving] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('email');
@@ -118,6 +125,9 @@ export function AdminPanel() {
           setServerNameRules(m.server_name_rules || '');
           setOutputFormatMode(m.output_format_mode || 'auto');
           setBypassRenderMode(m.bypass_render_mode || 'socks');
+          setSlovoRuDirectOverride(Boolean(m.slovo_ru_direct_override));
+          setSlovoRuDirectRoutes(m.slovo_ru_direct_routes || '');
+          setSlovoRuDirectProviderPreview(m.slovo_ru_direct_provider_preview || '');
         }
       } catch (err) {
         if (!cancelled) {
@@ -145,6 +155,8 @@ export function AdminPanel() {
         server_name_rules: serverNameRules,
         output_format_mode: outputFormatMode,
         bypass_render_mode: bypassRenderMode,
+        slovo_ru_direct_override: slovoRuDirectOverride,
+        slovo_ru_direct_routes: slovoRuDirectRoutes,
       });
       const u = m.master_subscription_url ?? '';
       setMasterSaved(u || null);
@@ -153,6 +165,9 @@ export function AdminPanel() {
       setServerNameRules(m.server_name_rules || '');
       setOutputFormatMode(m.output_format_mode || 'auto');
       setBypassRenderMode(m.bypass_render_mode || 'socks');
+      setSlovoRuDirectOverride(Boolean(m.slovo_ru_direct_override));
+      setSlovoRuDirectRoutes(m.slovo_ru_direct_routes || '');
+      setSlovoRuDirectProviderPreview(m.slovo_ru_direct_provider_preview || '');
       toast.success('Мастер-ссылка сохранена');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Не удалось сохранить');
@@ -209,7 +224,7 @@ export function AdminPanel() {
 
   return (
     <div className="h-full p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-content mx-auto space-y-6">
         <h1>Администрирование</h1>
 
         <div className="p-4 lg:p-6 bg-[var(--accordion-bg)] rounded-lg border border-[var(--border)] space-y-4">
@@ -310,6 +325,63 @@ export function AdminPanel() {
                   </span>
                 </label>
               )}
+              {serverNameMode === 'slovo' && (
+                <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--input-background)]/40 p-4">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-medium">Happ: direct-маршруты [RU Direct]</h3>
+                    <p className="text-xs leading-relaxed text-[var(--muted-foreground)]">
+                      Список правил для профилей «RU сайты работают». Без замены — как у провайдера.
+                      С включённой заменой список полностью подменяет провайдера: добавленное попадёт
+                      пользователям, удалённое исчезнет даже если было у Slovo.
+                    </p>
+                  </div>
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <Checkbox
+                      checked={slovoRuDirectOverride}
+                      onCheckedChange={(checked) => {
+                        const enabled = checked === true;
+                        setSlovoRuDirectOverride(enabled);
+                        if (enabled && !slovoRuDirectRoutes.trim() && slovoRuDirectProviderPreview) {
+                          setSlovoRuDirectRoutes(slovoRuDirectProviderPreview);
+                        }
+                      }}
+                      className="mt-0.5"
+                    />
+                    <span className="text-sm leading-snug">
+                      Заменить список direct-доменов провайдера своим
+                    </span>
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                      {slovoRuDirectOverride ? 'Свой список' : 'Сейчас у провайдера'}
+                    </span>
+                    <textarea
+                      value={
+                        slovoRuDirectOverride ? slovoRuDirectRoutes : slovoRuDirectProviderPreview
+                      }
+                      onChange={(e) => setSlovoRuDirectRoutes(e.target.value)}
+                      readOnly={!slovoRuDirectOverride}
+                      rows={12}
+                      spellCheck={false}
+                      placeholder={'domain:2ip.ru\ngeosite:category-ru\nsuffix:.ru'}
+                      className="w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--input-background)] px-4 py-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-default disabled:opacity-90"
+                    />
+                    <span className="block text-xs leading-relaxed text-[var(--muted-foreground)]">
+                      По одному правилу на строку. Префиксы: {SLOVO_RU_DIRECT_ROUTE_PREFIXES}.
+                      Пустые строки и строки с # игнорируются.
+                    </span>
+                    {slovoRuDirectOverride && slovoRuDirectProviderPreview && (
+                      <button
+                        type="button"
+                        className="text-xs text-[var(--primary)] underline-offset-2 hover:underline"
+                        onClick={() => setSlovoRuDirectRoutes(slovoRuDirectProviderPreview)}
+                      >
+                        Скопировать текущий список провайдера
+                      </button>
+                    )}
+                  </label>
+                </div>
+              )}
               <AppPrimaryButton
                 type="button"
                 disabled={masterSaving}
@@ -365,7 +437,7 @@ export function AdminPanel() {
                       onClick={() => handleSort('config_fetch_count')}
                       className="text-left transition-colors hover:text-[var(--foreground)]"
                     >
-                      Кол-во обновлений{sortArrow('config_fetch_count', sortKey, sortDirection)}
+                      Обновления{sortArrow('config_fetch_count', sortKey, sortDirection)}
                     </button>
                     <button
                       type="button"

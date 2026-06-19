@@ -11,6 +11,7 @@ from app.subscription.render import (
     render_clash_yaml,
     render_singbox_outbounds_json,
     render_uri_bundle_base64,
+    throne_needs_clash_yaml,
 )
 
 
@@ -295,3 +296,68 @@ def test_liberty_throne_renders_bypass_as_chain_when_requested():
     assert outbounds[1]["type"] == "vless"
     assert outbounds[1]["tag"] == "🇨🇦 Канада Bypass"
     assert outbounds[1]["detour"] == '🇷🇺 Узел "Канада Bypass"'
+
+
+def _xhttp_bypass_config(remarks: str, *, address: str = "tunnel.example.com"):
+    return {
+        "remarks": remarks,
+        "outbounds": [
+            {
+                "tag": "proxy",
+                "protocol": "vless",
+                "settings": {
+                    "vnext": [
+                        {
+                            "address": address,
+                            "port": 443,
+                            "users": [
+                                {
+                                    "id": "00000000-0000-0000-0000-000000000002",
+                                    "encryption": "none",
+                                    "flow": "",
+                                }
+                            ],
+                        }
+                    ]
+                },
+                "streamSettings": {
+                    "network": "xhttp",
+                    "security": "tls",
+                    "tlsSettings": {
+                        "allowInsecure": False,
+                        "serverName": address,
+                    },
+                    "xhttpSettings": {
+                        "host": "cdn.example.com",
+                        "mode": "packet-up",
+                        "path": "/livestreamcontent/",
+                        "extra": {
+                            "mode": "packet-up",
+                            "sessionKey": "X-Route-Session",
+                            "seqKey": "X-Position",
+                            "noGRPCHeader": True,
+                        },
+                    },
+                },
+            },
+            {"tag": "direct", "protocol": "freedom"},
+        ],
+        "routing": {"rules": []},
+    }
+
+
+def test_liberty_throne_renders_xhttp_bypass():
+    nodes = parse_subscription_text(
+        json.dumps([_xhttp_bypass_config("🇨🇭⚡Швейцария bypass")])
+    )
+    normalize_server_names(nodes, mode="liberty")
+    assert throne_needs_clash_yaml(nodes)
+    clash = yaml.safe_load(render_clash_yaml(nodes))
+    assert len(clash["proxies"]) == 1
+    proxy = clash["proxies"][0]
+    assert proxy["name"] == "🇨🇭 Швейцария Bypass"
+    assert proxy["type"] == "vless"
+    assert proxy["network"] == "xhttp"
+    assert proxy["xhttp-opts"]["path"] == "/livestreamcontent/"
+    assert proxy["xhttp-opts"]["host"] == "cdn.example.com"
+    assert proxy["xhttp-opts"]["session-key"] == "X-Route-Session"

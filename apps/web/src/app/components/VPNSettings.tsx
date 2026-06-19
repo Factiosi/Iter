@@ -107,7 +107,7 @@ export function VPNSettings({ canCreateGuestLinks }: VPNSettingsProps) {
 
   return (
     <div className="h-full p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-content mx-auto space-y-6">
         <h1>Настройки VPN</h1>
 
         <div className="p-4 lg:p-6 bg-[var(--accordion-bg)] rounded-lg border border-[var(--border)] space-y-4">

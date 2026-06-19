@@ -16,6 +16,7 @@ from app.roles import (
 from app.database import get_db
 from app.limiter_util import limiter
 from app.models import AllowedEmail, GuestVpnLink, PortalSettings, UserMainVpnLink
+from app.otp_consume import consume_otp_or_raise
 from app.otp_util import normalize_email
 from app.schemas import (
     AdminLoginBody,
@@ -28,13 +29,47 @@ from app.schemas import (
     WhitelistRow,
 )
 from app.services.vpn_public import restore_access, start_poisoning
-from app.subscription.display_names import VALID_NAME_MODES, normalize_server_names
+from app.subscription.display_names import NAME_MODE_SLOVO, VALID_NAME_MODES, normalize_server_names
+from app.subscription.fetch import fetch_master_subscription_sync
 from app.subscription.render import VALID_BYPASS_RENDER_MODES
+from app.subscription.slovo_ru_direct import (
+    extract_provider_slovo_ru_direct_domains,
+    format_routes_for_textarea,
+    validate_slovo_ru_direct_routes,
+)
 from app.subscription.ua import VALID_OUTPUT_FORMAT_MODES
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _slovo_ru_direct_provider_preview(master_url: str) -> str:
+    url = master_url.strip()
+    if not url:
+        return ""
+    try:
+        _ct, body = fetch_master_subscription_sync(url)
+        routes = extract_provider_slovo_ru_direct_domains(body)
+        return format_routes_for_textarea(routes)
+    except Exception:
+        logger.warning("Не удалось загрузить direct-маршруты Slovo из провайдера", exc_info=True)
+        return ""
+
+
+def _master_subscription_response(s: PortalSettings | None) -> MasterSubscriptionResponse:
+    url = (s.master_subscription_url or "").strip() if s else ""
+    provider_preview = _slovo_ru_direct_provider_preview(url) if url else ""
+    return MasterSubscriptionResponse(
+        master_subscription_url=url or None,
+        server_name_mode=(s.server_name_mode if s else "blanc") or "blanc",
+        server_name_rules=(s.server_name_rules if s else "") or "",
+        output_format_mode=(s.output_format_mode if s else "auto") or "auto",
+        bypass_render_mode=(s.bypass_render_mode if s else "socks") or "socks",
+        slovo_ru_direct_override=bool(s.slovo_ru_direct_override) if s else False,
+        slovo_ru_direct_routes=(s.slovo_ru_direct_routes if s else "") or "",
+        slovo_ru_direct_provider_preview=provider_preview,
+    )
 
 
 @router.post("/prepare", status_code=status.HTTP_204_NO_CONTENT)
@@ -145,14 +180,7 @@ def remove_whitelist(
 @router.get("/master-subscription", response_model=MasterSubscriptionResponse)
 def get_master_subscription(_admin: dict = Depends(require_admin), db: Session = Depends(get_db)):
     s = db.query(PortalSettings).filter(PortalSettings.id == 1).first()
-    url = (s.master_subscription_url or "").strip() if s else ""
-    return MasterSubscriptionResponse(
-        master_subscription_url=url or None,
-        server_name_mode=(s.server_name_mode if s else "blanc") or "blanc",
-        server_name_rules=(s.server_name_rules if s else "") or "",
-        output_format_mode=(s.output_format_mode if s else "auto") or "auto",
-        bypass_render_mode=(s.bypass_render_mode if s else "socks") or "socks",
-    )
+    return _master_subscription_response(s)
 
 
 @router.patch("/master-subscription", response_model=MasterSubscriptionResponse)
@@ -176,6 +204,17 @@ def patch_master_subscription(
         normalize_server_names([], mode=server_name_mode, custom_rules=server_name_rules)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
+    slovo_ru_direct_routes = body.slovo_ru_direct_routes
+    if body.slovo_ru_direct_override:
+        try:
+            validate_slovo_ru_direct_routes(slovo_ru_direct_routes)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+    elif server_name_mode == NAME_MODE_SLOVO and slovo_ru_direct_routes.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Список direct-маршрутов можно сохранить только с включённой заменой провайдера",
+        )
 
     s = db.query(PortalSettings).filter(PortalSettings.id == 1).first()
     if s is None:
@@ -186,6 +225,8 @@ def patch_master_subscription(
             server_name_rules=server_name_rules,
             output_format_mode=output_format_mode,
             bypass_render_mode=bypass_render_mode,
+            slovo_ru_direct_override=body.slovo_ru_direct_override,
+            slovo_ru_direct_routes=slovo_ru_direct_routes if body.slovo_ru_direct_override else "",
         )
         db.add(s)
     else:
@@ -194,17 +235,16 @@ def patch_master_subscription(
         s.server_name_rules = server_name_rules
         s.output_format_mode = output_format_mode
         s.bypass_render_mode = bypass_render_mode
+        s.slovo_ru_direct_override = body.slovo_ru_direct_override
+        if body.slovo_ru_direct_override:
+            s.slovo_ru_direct_routes = slovo_ru_direct_routes
+        else:
+            s.slovo_ru_direct_routes = ""
         db.add(s)
     db.commit()
     db.refresh(s)
     logger.info("Master subscription URL updated")
-    return MasterSubscriptionResponse(
-        master_subscription_url=(s.master_subscription_url or "").strip() or None,
-        server_name_mode=s.server_name_mode or "blanc",
-        server_name_rules=s.server_name_rules or "",
-        output_format_mode=s.output_format_mode or "auto",
-        bypass_render_mode=s.bypass_render_mode or "socks",
-    )
+    return _master_subscription_response(s)
 
 
 @router.patch("/whitelist/role", response_model=WhitelistRow)

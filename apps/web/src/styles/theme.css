@@ -209,3 +209,16 @@
     line-height: 1.5;
   }
 }
+
+@layer utilities {
+  /* max-w-3xl (48rem) на мобиле; на десктопе +30% */
+  .max-w-content {
+    max-width: 48rem;
+  }
+
+  @media (min-width: 1024px) {
+    .max-w-content {
+      max-width: 62.4rem;
+    }
+  }
+}

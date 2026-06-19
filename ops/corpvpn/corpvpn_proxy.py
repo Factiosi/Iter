@@ -24,6 +24,7 @@ if str(APP_PATH) not in sys.path:
 
 try:
     from app.subscription.display_names import NAME_MODE_BLANC
+    from app.subscription.display_names import NAME_MODE_SLOVO
     from app.subscription.pipeline import build_subscription_response
     from app.subscription.render import BYPASS_RENDER_SOCKS
     from app.subscription.ua import OUTPUT_FORMAT_AUTO, resolve_output_format
@@ -160,6 +161,7 @@ def _save_state_doc(doc: dict[str, Any]) -> None:
 def _build_response(slot: int, user_agent: str | None) -> CachedResponse:
     master_url = _master_url_for_slot(slot)
     name_mode = os.environ.get("CORP_NAME_MODE", NAME_MODE_BLANC).strip() or NAME_MODE_BLANC
+    name_rules = os.environ.get("CORP_NAME_RULES", "").strip()
     output_format_mode = os.environ.get("CORP_OUTPUT_FORMAT_MODE", OUTPUT_FORMAT_AUTO).strip() or OUTPUT_FORMAT_AUTO
     bypass_render_mode = os.environ.get("CORP_BYPASS_RENDER_MODE", BYPASS_RENDER_SOCKS).strip() or BYPASS_RENDER_SOCKS
     route_name = os.environ.get("CORP_ROUTE_NAME", DEFAULT_ROUTE_NAME).strip() or DEFAULT_ROUTE_NAME
@@ -171,6 +173,7 @@ def _build_response(slot: int, user_agent: str | None) -> CachedResponse:
         slot,
         master_url,
         name_mode,
+        name_rules,
         output_format_mode,
         bypass_render_mode,
         fmt,
@@ -185,24 +188,28 @@ def _build_response(slot: int, user_agent: str | None) -> CachedResponse:
         if cached is not None and now - cached.created_at < ttl:
             return cached
 
-        state_doc = _load_state_doc()
-        slot_state = state_doc.get(str(slot), {})
-        if not isinstance(slot_state, dict):
-            slot_state = {}
+        slot_state: dict[str, Any] = {}
+        state_doc: dict[str, Any] | None = None
+        if name_mode != NAME_MODE_SLOVO:
+            state_doc = _load_state_doc()
+            loaded = state_doc.get(str(slot), {})
+            slot_state = loaded if isinstance(loaded, dict) else {}
 
         media_type, content, upstream_headers, next_slot_state = build_subscription_response(
             master_url,
             user_agent,
             deactivated,
             name_mode=name_mode,
+            name_rules=name_rules,
             output_format_mode=output_format_mode,
             bypass_render_mode=bypass_render_mode,
             slot_state=slot_state,
             route_name=route_name,
             clash_group_name=clash_group_name,
         )
-        state_doc[str(slot)] = next_slot_state
-        _save_state_doc(state_doc)
+        if name_mode != NAME_MODE_SLOVO and state_doc is not None:
+            state_doc[str(slot)] = next_slot_state
+            _save_state_doc(state_doc)
 
         response = CachedResponse(
             media_type=media_type,

@@ -34,6 +34,9 @@ class PortalSettings(Base):
     bypass_render_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="socks")
     #: JSON: каноническое имя группы → host:port → номер слота (#N в подписке).
     server_name_slots: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    #: Свой whitelist direct-доменов для Slovo [RU Direct] в Happ (заменяет провайдера).
+    slovo_ru_direct_override: Mapped[bool] = mapped_column(nullable=False, default=False)
+    slovo_ru_direct_routes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

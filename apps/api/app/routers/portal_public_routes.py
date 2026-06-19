@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.subscription.display_names import NAME_MODE_SLOVO
 from app.subscription.pipeline import build_subscription_response
+from app.subscription.slovo_ru_direct import parse_slovo_ru_direct_routes
 from app.services.vpn_public import (
     delete_after_poisoned_delivery,
     find_guest_by_localpart,
@@ -42,6 +44,14 @@ def _serve_subscription(
     poison = row.vpn_link_status == VPN_LINK_STATUS_POISONING
     ua = request.headers.get("user-agent")
     slot_state = load_server_name_slots(portal_settings)
+    slovo_ru_direct_override: list[str] | None = None
+    if (
+        (portal_settings.server_name_mode or "blanc") == NAME_MODE_SLOVO
+        and portal_settings.slovo_ru_direct_override
+    ):
+        slovo_ru_direct_override = parse_slovo_ru_direct_routes(
+            portal_settings.slovo_ru_direct_routes or ""
+        )
     try:
         media_type, body, headers, slot_state = build_subscription_response(
             portal_settings.master_subscription_url or "",
@@ -52,6 +62,7 @@ def _serve_subscription(
             output_format_mode=portal_settings.output_format_mode or "auto",
             bypass_render_mode=portal_settings.bypass_render_mode or "socks",
             slot_state=slot_state,
+            slovo_ru_direct_routes_override=slovo_ru_direct_override,
         )
     except Exception:
         logger.exception("subscription pipeline failed")

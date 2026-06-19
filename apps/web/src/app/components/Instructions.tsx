@@ -339,7 +339,7 @@ const INSTRUCTION_ITEMS: InstructionItem[] = [
 export function Instructions() {
   return (
     <div className="h-full p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-content mx-auto space-y-6">
         <h1>Инструкции</h1>
 
         <Accordion.Root type="single" collapsible className="space-y-3">

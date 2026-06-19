@@ -1,22 +1,22 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Сборка архива Iter Portal и деплой на factiosi.com (Docker).
+  Build Iter Portal archive and deploy to factiosi.com (Docker).
 
 .PARAMETER RemoteHost
-  SSH target. Без значения — спросит в интерактивном режиме.
+  SSH target. Prompted in interactive mode when empty.
 
 .PARAMETER SkipTests
-  Пропустить pytest. В интерактивном режиме можно выбрать в меню.
+  Skip pytest before packaging.
 
 .PARAMETER DryRun
-  Только показать шаги без scp/ssh на сервер.
+  Print steps without scp/ssh.
 
 .PARAMETER BuildScope
-  full | api | web — что пересобрать на сервере.
+  full | api | web
 
 .PARAMETER NonInteractive
-  Не задавать вопросы; использовать только переданные параметры и значения по умолчанию.
+  Use defaults; no prompts.
 
 .EXAMPLE
   .\scripts\deploy-iter.ps1
@@ -53,7 +53,7 @@ function Read-YesNo {
     if ([string]::IsNullOrWhiteSpace($answer)) {
         return $Default
     }
-    return $answer.Trim().ToLowerInvariant() -in @("y", "yes", "д", "да")
+    return $answer.Trim().ToLowerInvariant() -in @("y", "yes", "d", "da")
 }
 
 function Read-Option {
@@ -80,49 +80,26 @@ function Read-Option {
     if ($matched) {
         return $matched[0]
     }
-    Write-Host "Неверный выбор, использую вариант по умолчанию." -ForegroundColor Yellow
+    Write-Host "Invalid choice, using default." -ForegroundColor Yellow
     return $Choices[$DefaultIndex]
-}
-
-function Get-DockerDeploySteps([string]$Scope) {
-    switch ($Scope) {
-        "api" {
-            return @(
-                "docker compose build api"
-                "docker compose up -d api"
-            )
-        }
-        "web" {
-            return @(
-                "docker compose build web"
-                "docker compose up -d web"
-            )
-        }
-        default {
-            return @(
-                "docker compose build"
-                "docker compose up -d"
-            )
-        }
-    }
 }
 
 function Get-BuildScopeLabel([string]$Scope) {
     switch ($Scope) {
-        "api" { return "только api" }
-        "web" { return "только web" }
+        "api" { return "api only" }
+        "web" { return "web only" }
         default { return "api + web" }
     }
 }
 
 function Invoke-DeployMenu {
     Write-Host ""
-    Write-Host "=== Деплой Iter Portal ===" -ForegroundColor Green
-    Write-Host "Enter — значение по умолчанию в квадратных скобках."
+    Write-Host "=== Iter Portal deploy ===" -ForegroundColor Green
+    Write-Host "Press Enter for the value in square brackets."
     Write-Host ""
 
     if (-not $PSBoundParameters.ContainsKey("RemoteHost") -or [string]::IsNullOrWhiteSpace($RemoteHost)) {
-        $entered = Read-Host "SSH-хост [$DefaultRemoteHost]"
+        $entered = Read-Host "SSH host [$DefaultRemoteHost]"
         if ([string]::IsNullOrWhiteSpace($entered)) {
             $script:RemoteHost = $DefaultRemoteHost
         } else {
@@ -131,32 +108,27 @@ function Invoke-DeployMenu {
     }
 
     if (-not $PSBoundParameters.ContainsKey("SkipTests")) {
-        $script:SkipTests = -not (Read-YesNo "Запустить pytest перед упаковкой?" $true)
+        $script:SkipTests = -not (Read-YesNo "Run pytest before packaging?" $true)
     }
 
     if (-not $PSBoundParameters.ContainsKey("BuildScope") -or [string]::IsNullOrWhiteSpace($BuildScope)) {
-        $choice = Read-Option "Что пересобрать на сервере?" @(
-            "full — api + web (полный деплой)"
-            "api — только backend"
-            "web — только frontend"
-        ) 0
-        $script:BuildScope = ($choice -split " — ", 2)[0].Trim()
+        $script:BuildScope = Read-Option "Rebuild on server?" @("full", "api", "web") 0
     }
 
     if (-not $PSBoundParameters.ContainsKey("DryRun")) {
-        $script:DryRun = Read-YesNo "Dry-run (без scp/ssh на сервер)?" $false
+        $script:DryRun = Read-YesNo "Dry-run (no scp/ssh)?" $false
     }
 
     Write-Host ""
-    Write-Host "План:" -ForegroundColor Yellow
-    Write-Host "  Хост:      $RemoteHost"
-    Write-Host "  pytest:    $(if ($SkipTests) { 'пропустить' } else { 'запустить' })"
-    Write-Host "  Сборка:    $(Get-BuildScopeLabel $BuildScope)"
-    Write-Host "  Dry-run:   $(if ($DryRun) { 'да' } else { 'нет' })"
+    Write-Host "Plan:" -ForegroundColor Yellow
+    Write-Host "  Host:      $RemoteHost"
+    Write-Host "  pytest:    $(if ($SkipTests) { 'skip' } else { 'run' })"
+    Write-Host "  Build:     $(Get-BuildScopeLabel $BuildScope)"
+    Write-Host "  Dry-run:   $(if ($DryRun) { 'yes' } else { 'no' })"
     Write-Host ""
 
-    if (-not (Read-YesNo "Начать деплой?" $true)) {
-        Write-Host "Отменено." -ForegroundColor Yellow
+    if (-not (Read-YesNo "Start deploy?" $true)) {
+        Write-Host "Cancelled." -ForegroundColor Yellow
         exit 0
     }
 }
@@ -189,10 +161,10 @@ if (-not $SkipTests) {
         Pop-Location
     }
 } else {
-    Write-Host "pytest пропущен." -ForegroundColor Yellow
+    Write-Host "pytest skipped." -ForegroundColor Yellow
 }
 
-Write-Step "Создание архива $Archive"
+Write-Step "Creating archive $Archive"
 if (Test-Path $Archive) { Remove-Item $Archive -Force }
 Push-Location $RepoRoot
 try {
@@ -205,37 +177,34 @@ try {
         --exclude='apps/api/__pycache__' `
         --exclude='apps/api/.pytest_cache' `
         --exclude='.git' `
+        --exclude='ops/corpvpn' `
         docker-compose.yml .dockerignore .gitignore .env.example apps assets ops scripts
     $size = (Get-Item $Archive).Length
-    Write-Host "Архив: $([math]::Round($size / 1KB)) KB"
+    Write-Host "Archive: $([math]::Round($size / 1KB)) KB"
 } finally {
     Pop-Location
 }
 
-Write-Step "Загрузка на сервер"
+Write-Step "Upload to server"
 if ($DryRun) {
     Write-Host "[dry-run] scp $Archive ${RemoteHost}:$RemoteArchive"
 } else {
     scp $Archive "${RemoteHost}:${RemoteArchive}"
 }
 
-$dockerSteps = (Get-DockerDeploySteps $BuildScope) -join "`n"
 $RemoteScript = @"
 set -euo pipefail
+export BUILD_SCOPE=$BuildScope
 cd ~/iter-portal
 TS=`$(date +%Y%m%d-%H%M%S)
 mkdir -p ~/iter-backups
 cp -a apps/api/data/iter.db ~/iter-backups/iter.db.`$TS
 tar -xzf ~/iter-docker-upload.tar.gz -C ~/iter-portal --overwrite
-$dockerSteps
-sleep 3
-curl -fsS https://iter.factiosi.com/health
-docker compose ps
-rm -f ~/iter-docker-upload.tar.gz
-echo "Deploy OK"
+export SKIP_EXTRACT=1
+bash ops/deploy/deploy-iter-remote.sh
 "@
 
-Write-Step "Деплой на сервере (backup DB → extract → $(Get-BuildScopeLabel $BuildScope))"
+Write-Step "Remote deploy (backup DB -> extract -> $(Get-BuildScopeLabel $BuildScope))"
 if ($DryRun) {
     Write-Host "[dry-run] ssh $RemoteHost bash -s"
     Write-Host $RemoteScript
@@ -243,6 +212,6 @@ if ($DryRun) {
     $RemoteScript | ssh $RemoteHost "bash -s"
 }
 
-Write-Step "Готово"
-Write-Host "Проверка Throne (подставьте slug):" -ForegroundColor Yellow
+Write-Step "Done"
+Write-Host "Throne check (replace slug):" -ForegroundColor Yellow
 Write-Host 'curl -fsS -H "User-Agent: Throne/1.0" https://iter.factiosi.com/config/<slug> | python -m json.tool | head'

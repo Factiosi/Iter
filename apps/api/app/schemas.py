@@ -67,6 +67,9 @@ class MasterSubscriptionResponse(BaseModel):
     server_name_rules: str = ""
     output_format_mode: str = "auto"
     bypass_render_mode: str = "socks"
+    slovo_ru_direct_override: bool = False
+    slovo_ru_direct_routes: str = ""
+    slovo_ru_direct_provider_preview: str = ""
 
 
 class MasterSubscriptionUpdate(BaseModel):
@@ -75,3 +78,5 @@ class MasterSubscriptionUpdate(BaseModel):
     server_name_rules: str = ""
     output_format_mode: str = Field(default="auto", min_length=4, max_length=32)
     bypass_render_mode: str = Field(default="socks", min_length=4, max_length=16)
+    slovo_ru_direct_override: bool = False
+    slovo_ru_direct_routes: str = ""

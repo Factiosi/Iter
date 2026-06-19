@@ -47,6 +47,24 @@ def test_clash_proxy_preserves_ws_tls_fp_skip_cert_and_packet_encoding():
     assert proxy["ws-opts"]["headers"]["Host"] == "cdn.example.com"
 
 
+def test_vless_uri_preserves_mlkem_encryption():
+    node = ProxyNode(
+        name="🇪🇪 Эстония",
+        uuid="c9f2d397-23c6-436a-9bca-a6ebb8f42322",
+        server="ee.example.com",
+        port=443,
+        network="tcp",
+        tls=True,
+        pbk="public-key",
+        sid="short-id",
+        sni="aws.amazon.com",
+        extra={"encryption": "mlkem768x25519plus.native.0rtt.test"},
+    )
+    rendered = _node_to_vless_uri(node)
+    assert "encryption=mlkem768x25519plus.native.0rtt.test" in rendered
+    assert "encryption=none" not in rendered
+
+
 def test_vless_uri_preserves_ws_tls_fp_and_allow_insecure():
     node = ProxyNode(
         name="Whitelist#1",

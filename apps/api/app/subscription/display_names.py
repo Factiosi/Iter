@@ -16,14 +16,24 @@ from app.subscription.server_slots import _FREED_SLOTS_KEY
 
 NAME_MODE_BLANC = "blanc"
 NAME_MODE_LIBERTY = "liberty"
+NAME_MODE_SLOVO = "slovo"
 NAME_MODE_CUSTOM = "custom"
 NAME_MODE_NONE = "none"
-VALID_NAME_MODES = frozenset({NAME_MODE_BLANC, NAME_MODE_LIBERTY, NAME_MODE_CUSTOM, NAME_MODE_NONE})
+VALID_NAME_MODES = frozenset({
+    NAME_MODE_BLANC,
+    NAME_MODE_LIBERTY,
+    NAME_MODE_SLOVO,
+    NAME_MODE_CUSTOM,
+    NAME_MODE_NONE,
+})
 
 _FLAG_START = re.compile(r"^([\U0001F1E6-\U0001F1FF]{2})\s*")
 _PARENS = re.compile(r"\([^)]*\)")
 _WHITELIST_HASH = re.compile(r"Whitelist#\d+", re.IGNORECASE)
 _SERVICE_NAME = re.compile(r"→\s*Blanc\s*VPN\s*$", re.IGNORECASE)
+_SLOVO_ROMAN = re.compile(r"\s+(I|II|III|IV|V)\b(?=\s*[·]|$)")
+_SLOVO_ROMAN_END = re.compile(r"\s+(I|II|III|IV|V)$")
+_SLOVO_WHITELIST_ROMAN = re.compile(r"\b(III|II|IV|V|I)\b", re.IGNORECASE)
 
 
 def _strip_extra_word_and_parens(s: str) -> str:
@@ -115,6 +125,72 @@ def _canonical_liberty_name_for_proxy(name: str) -> str:
     return f"{flag} {country}".strip()
 
 
+def _slovo_roman_to_int(roman: str) -> int | None:
+    mapping = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
+    return mapping.get(roman.upper())
+
+
+def _slovo_strip_roman(country_part: str) -> tuple[str, int | None]:
+    for pattern in (_SLOVO_ROMAN, _SLOVO_ROMAN_END):
+        match = pattern.search(country_part)
+        if not match:
+            continue
+        number = _slovo_roman_to_int(match.group(1))
+        stripped = pattern.sub("", country_part).strip()
+        return stripped, number
+    return country_part, None
+
+
+def _slovo_whitelist_number(raw: str) -> int:
+    for roman, value in (("III", 3), ("II", 2), ("IV", 4), ("V", 5), ("I", 1)):
+        if re.search(rf"\b{roman}\b", raw, re.IGNORECASE):
+            return value
+    return 1
+
+
+def _slovo_suffix_label(suffix: str) -> str:
+    lower = suffix.lower()
+    if "ru сайты" in lower or "ru direct" in lower:
+        return "RU Direct"
+    if "ru bypass" in lower:
+        return "RU Bypass"
+    if "все через vpn" in lower or "all proxy" in lower:
+        return "ALL Proxy"
+    return suffix.strip()
+
+
+def _canonical_slovo_name_for_proxy(name: str) -> str:
+    raw = name.strip()
+    if not raw:
+        return ""
+    lower = raw.lower()
+    flag_m = _FLAG_START.match(raw)
+    flag = flag_m.group(1) if flag_m else ""
+    body = raw[flag_m.end() :].strip() if flag_m else raw
+
+    if "бел" in lower and ("обход бел" in lower or _SLOVO_WHITELIST_ROMAN.search(body)):
+        return f"{flag or '🇷🇺'} 🏳️ Whitelist #{_slovo_whitelist_number(raw)}"
+
+    parts = [p.strip() for p in body.split("·", 1)]
+    country_part = parts[0].strip()
+    suffix_raw = parts[1].strip() if len(parts) > 1 else ""
+
+    country_name, number = _slovo_strip_roman(country_part)
+    label = f"{country_name} #{number}" if number is not None else country_name
+    suffix = _slovo_suffix_label(suffix_raw)
+    if suffix:
+        return f"{flag} {label} [{suffix}]".strip()
+    return f"{flag} {label}".strip()
+
+
+_SLOVO_ROUTE_SUFFIX = re.compile(r"\s+\[(RU Direct|RU Bypass|ALL Proxy)\]\s*$", re.IGNORECASE)
+
+
+def strip_slovo_route_suffix(name: str) -> str:
+    """Убирает [RU Direct]/[ALL Proxy] — для Throne/FlClash со своими routes."""
+    return _SLOVO_ROUTE_SUFFIX.sub("", name.strip())
+
+
 def _parse_custom_rules(rules_text: str) -> list[tuple[re.Pattern[str], str]]:
     rules: list[tuple[re.Pattern[str], str]] = []
     for raw_line in rules_text.splitlines():
@@ -153,6 +229,14 @@ def normalize_server_names(
         return state
 
     parsed_rules = _parse_custom_rules(custom_rules) if mode == NAME_MODE_CUSTOM else []
+
+    if mode == NAME_MODE_SLOVO:
+        for n in nodes:
+            c = _canonical_slovo_name_for_proxy(n.name)
+            if c:
+                n.name = c
+        return state
+
     keys: list[str | None] = []
     for n in nodes:
         if mode == NAME_MODE_CUSTOM:

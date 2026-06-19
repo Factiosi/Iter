@@ -203,6 +203,10 @@ def _liberty_vless_node(name: str, outbound: dict[str, Any], socks_by_tag: dict[
         extra["_dialer_proxy"] = dialer_tag
         extra["_dialer_socks"] = socks_by_tag[dialer_tag]
 
+    encryption = str(user.get("encryption") or "none").strip()
+    if encryption.lower() not in ("", "none"):
+        extra["encryption"] = encryption
+
     return ProxyNode(
         name=name,
         uuid=uuid,
@@ -286,9 +290,9 @@ def filter_liberty_configs(data: Any) -> list[dict[str, Any]]:
     ]
 
 
-def nodes_from_liberty_json(data: Any) -> list[ProxyNode]:
+def _nodes_from_xray_json_configs(configs: list[dict[str, Any]]) -> list[ProxyNode]:
     nodes: list[ProxyNode] = []
-    for config in filter_liberty_configs(data):
+    for config in configs:
         remarks = str(config.get("remarks") or "").strip()
         raw_outbounds = config.get("outbounds") or []
         if not isinstance(raw_outbounds, list):
@@ -309,6 +313,45 @@ def nodes_from_liberty_json(data: Any) -> list[ProxyNode]:
     return nodes
 
 
+def is_slovo_separator_or_auto(remarks: str) -> bool:
+    lower = remarks.lower()
+    return "автовыбор" in lower
+
+
+def filter_slovo_configs(data: Any) -> list[dict[str, Any]]:
+    configs = data if isinstance(data, list) else [data]
+    return [
+        config
+        for config in configs
+        if isinstance(config, dict)
+        and str(config.get("remarks") or "").strip()
+        and not is_slovo_separator_or_auto(str(config.get("remarks") or ""))
+    ]
+
+
+def is_slovo_subscription(data: Any) -> bool:
+    configs = data if isinstance(data, list) else [data]
+    for config in configs:
+        if not isinstance(config, dict):
+            continue
+        lower = str(config.get("remarks") or "").lower()
+        if is_slovo_separator_or_auto(lower):
+            return True
+        if "ru сайты работают" in lower or "все через vpn" in lower:
+            return True
+        if "обход белых" in lower and "обходы" not in lower:
+            return True
+    return False
+
+
+def nodes_from_liberty_json(data: Any) -> list[ProxyNode]:
+    return _nodes_from_xray_json_configs(filter_liberty_configs(data))
+
+
+def nodes_from_slovo_json(data: Any) -> list[ProxyNode]:
+    return _nodes_from_xray_json_configs(filter_slovo_configs(data))
+
+
 def _filter_service_nodes(nodes: list[ProxyNode]) -> list[ProxyNode]:
     out: list[ProxyNode] = []
     for n in nodes:
@@ -325,11 +368,14 @@ def parse_subscription_text(body: str) -> list[ProxyNode]:
     if not text:
         return []
 
-    # LIBERTY отдаёт список готовых JSON-конфигов Xray: берём нужные outbounds.
+    # LIBERTY / Slovo отдают список готовых JSON-конфигов Xray: берём нужные outbounds.
     if text.startswith("[") or text.startswith("{"):
         try:
             data = json.loads(text)
-            nodes = nodes_from_liberty_json(data)
+            if is_slovo_subscription(data):
+                nodes = nodes_from_slovo_json(data)
+            else:
+                nodes = nodes_from_liberty_json(data)
             if nodes:
                 return nodes
         except (json.JSONDecodeError, TypeError, ValueError):

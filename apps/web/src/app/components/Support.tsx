@@ -7,7 +7,7 @@ const TELEGRAM_URL = 'https://t.me/factiosi';
 export function Support() {
   return (
     <div className="h-full p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-content mx-auto space-y-6">
         <h1>Поддержка</h1>
 
         <div className="space-y-4">

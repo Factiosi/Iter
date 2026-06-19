@@ -154,6 +154,9 @@ export type MasterSubscriptionResponse = {
   server_name_rules: string;
   output_format_mode: string;
   bypass_render_mode: string;
+  slovo_ru_direct_override: boolean;
+  slovo_ru_direct_routes: string;
+  slovo_ru_direct_provider_preview: string;
 };
 
 /** Сохранённые основные ссылки VPN (если уже создавались). 404 → null. */
@@ -241,7 +244,12 @@ export async function patchMasterSubscription(
   url: string,
   settings: Pick<
     MasterSubscriptionResponse,
-    'server_name_mode' | 'server_name_rules' | 'output_format_mode' | 'bypass_render_mode'
+    | 'server_name_mode'
+    | 'server_name_rules'
+    | 'output_format_mode'
+    | 'bypass_render_mode'
+    | 'slovo_ru_direct_override'
+    | 'slovo_ru_direct_routes'
   >,
 ): Promise<MasterSubscriptionResponse> {
   const res = await apiFetch('/api/admin/master-subscription', {

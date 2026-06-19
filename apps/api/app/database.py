@@ -74,6 +74,10 @@ def migrate_sqlite_schema() -> None:
             _add_col(conn, "portal_settings", "server_name_slots TEXT NOT NULL DEFAULT '{}'")
         if "bypass_render_mode" not in col:
             _add_col(conn, "portal_settings", "bypass_render_mode VARCHAR(16) NOT NULL DEFAULT 'socks'")
+        if "slovo_ru_direct_override" not in col:
+            _add_col(conn, "portal_settings", "slovo_ru_direct_override BOOLEAN NOT NULL DEFAULT 0")
+        if "slovo_ru_direct_routes" not in col:
+            _add_col(conn, "portal_settings", "slovo_ru_direct_routes TEXT NOT NULL DEFAULT ''")
         n = conn.execute(text("SELECT COUNT(*) FROM portal_settings")).scalar()
         if n == 0:
             conn.execute(text("INSERT INTO portal_settings (id, master_subscription_url) VALUES (1, NULL)"))
