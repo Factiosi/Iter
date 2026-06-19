@@ -192,16 +192,20 @@ if ($DryRun) {
     scp $Archive "${RemoteHost}:${RemoteArchive}"
 }
 
+$dockerSteps = (Get-DockerDeploySteps $BuildScope) -join "`n"
 $RemoteScript = @"
 set -euo pipefail
-export BUILD_SCOPE=$BuildScope
 cd ~/iter-portal
 TS=`$(date +%Y%m%d-%H%M%S)
 mkdir -p ~/iter-backups
 cp -a apps/api/data/iter.db ~/iter-backups/iter.db.`$TS
 tar -xzf ~/iter-docker-upload.tar.gz -C ~/iter-portal --overwrite
-export SKIP_EXTRACT=1
-bash ops/deploy/deploy-iter-remote.sh
+$dockerSteps
+sleep 3
+curl -fsS https://iter.factiosi.com/health
+docker compose ps
+rm -f ~/iter-docker-upload.tar.gz
+echo Deploy OK
 "@
 
 Write-Step "Remote deploy (backup DB -> extract -> $(Get-BuildScopeLabel $BuildScope))"

@@ -8,7 +8,6 @@ from copy import deepcopy
 from app.subscription.display_names import NAME_MODE_LIBERTY
 from app.subscription.display_names import NAME_MODE_SLOVO
 from app.subscription.display_names import normalize_server_names
-from app.subscription.display_names import strip_slovo_route_suffix
 from app.subscription.slovo_ru_direct import apply_slovo_ru_direct_routes_to_config
 from app.subscription.server_slots import ServerSlotState
 from app.subscription.fetch import fetch_master_subscription_sync
@@ -46,7 +45,7 @@ def build_subscription_response(
     route_name: str = "Iter Route",
     clash_group_name: str = "Iter VPN",
     slovo_ru_direct_routes_override: list[str] | None = None,
-    happ_routing_deeplink: bool = False,
+    happ_routing_deeplink: bool = True,
     happ_routing_direct_sites: list[str] | None = None,
 ) -> tuple[str, str, dict[str, str], ServerSlotState]:
     """
@@ -70,9 +69,6 @@ def build_subscription_response(
             custom_rules=name_rules,
             slot_state=slots,
         )
-        if name_mode == NAME_MODE_SLOVO and fmt in (FORMAT_THRONE, FORMAT_FLCLASH):
-            for n in nodes:
-                n.name = strip_slovo_route_suffix(n.name)
         if name_mode in XRAY_JSON_NAME_MODES:
             filter_fn = filter_slovo_configs if name_mode == NAME_MODE_SLOVO else filter_liberty_configs
             if name_mode == NAME_MODE_SLOVO and fmt == FORMAT_HAPP:
@@ -110,7 +106,7 @@ def build_subscription_response(
                     body,
                     nodes,
                     filter_fn=filter_fn,
-                    strip_routing=False,
+                    strip_routing=True,
                 )
                 if xray_json is not None:
                     headers = build_subscription_headers(deactivated=False, fmt=fmt)
@@ -153,7 +149,7 @@ def _render_xray_json_subscription(
 ) -> str | None:
     """
     Провайдеры вроде LIBERTY/Slovo отдают полноценные клиентские JSON-конфиги.
-    Меняем remarks; strip_routing=True — убрать routing (LIBERTY не использует для Happ deeplink).
+    Меняем remarks; strip_routing=True — убрать routing (Happ использует глобальный deeplink).
     """
     text = body.strip()
     if not (text.startswith("[") or text.startswith("{")):

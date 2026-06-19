@@ -328,11 +328,11 @@ export function AdminPanel() {
               {serverNameMode === 'slovo' && (
                 <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--input-background)]/40 p-4">
                   <div className="space-y-1">
-                    <h3 className="text-sm font-medium">Happ: direct-маршруты [RU Direct]</h3>
+                    <h3 className="text-sm font-medium">Happ: Iter Route (directsites)</h3>
                     <p className="text-xs leading-relaxed text-[var(--muted-foreground)]">
-                      Список правил для профилей «RU сайты работают». Без замены — как у провайдера.
-                      С включённой заменой список полностью подменяет провайдера: добавленное попадёт
-                      пользователям, удалённое исчезнет даже если было у Slovo.
+                      Список правил direct для глобального маршрута «Iter Route» в Happ. Routing в JSON
+                      серверов не отдаётся. Без замены — стандартный список (.ru, geosite:category-ru).
+                      С включённой заменой ваш список полностью подменяет directsites маршрута.
                     </p>
                   </div>
                   <label className="flex cursor-pointer items-start gap-3">
@@ -348,7 +348,7 @@ export function AdminPanel() {
                       className="mt-0.5"
                     />
                     <span className="text-sm leading-snug">
-                      Заменить список direct-доменов провайдера своим
+                      Заменить directsites маршрута Iter Route своим списком
                     </span>
                   </label>
                   <label className="block space-y-2">

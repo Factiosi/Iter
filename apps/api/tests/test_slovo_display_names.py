@@ -11,11 +11,11 @@ def _n(name: str) -> ProxyNode:
     )
 
 
-def test_slovo_suffix_mapping():
+def test_slovo_names_without_route_suffix():
     nodes = [
         _n("🇵🇱 Польша · RU сайты работают"),
         _n("🇸🇪 Швеция II · все через VPN"),
     ]
     normalize_server_names(nodes, mode="slovo")
-    assert nodes[0].name == "🇵🇱 Польша [RU Direct]"
-    assert nodes[1].name == "🇸🇪 Швеция #2 [ALL Proxy]"
+    assert nodes[0].name == "🇵🇱 Польша"
+    assert nodes[1].name == "🇸🇪 Швеция #2"

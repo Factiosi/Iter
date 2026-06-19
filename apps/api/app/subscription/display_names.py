@@ -148,17 +148,6 @@ def _slovo_whitelist_number(raw: str) -> int:
     return 1
 
 
-def _slovo_suffix_label(suffix: str) -> str:
-    lower = suffix.lower()
-    if "ru сайты" in lower or "ru direct" in lower:
-        return "RU Direct"
-    if "ru bypass" in lower:
-        return "RU Bypass"
-    if "все через vpn" in lower or "all proxy" in lower:
-        return "ALL Proxy"
-    return suffix.strip()
-
-
 def _canonical_slovo_name_for_proxy(name: str) -> str:
     raw = name.strip()
     if not raw:
@@ -173,13 +162,9 @@ def _canonical_slovo_name_for_proxy(name: str) -> str:
 
     parts = [p.strip() for p in body.split("·", 1)]
     country_part = parts[0].strip()
-    suffix_raw = parts[1].strip() if len(parts) > 1 else ""
 
     country_name, number = _slovo_strip_roman(country_part)
     label = f"{country_name} #{number}" if number is not None else country_name
-    suffix = _slovo_suffix_label(suffix_raw)
-    if suffix:
-        return f"{flag} {label} [{suffix}]".strip()
     return f"{flag} {label}".strip()
 
 

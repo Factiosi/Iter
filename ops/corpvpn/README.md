@@ -36,8 +36,8 @@ python3 ops/corpvpn/corpvpn_proxy.py
 
 **Имена серверов** (preset `slovo`):
 
-- `🇪🇪 Эстония #1 [RU Direct]`
-- `🇸🇪 Швеция #2 [ALL Proxy]`
+- `🇪🇪 Эстония #1`
+- `🇸🇪 Швеция #2`
 - `🇷🇺 🏳️ Whitelist #2`
 
 Слоты имён (`corpvpn-slot-state.json`) для `slovo` **не используются** — можно не удалять файл, но он не влияет на имена.
