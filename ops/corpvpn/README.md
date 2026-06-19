@@ -30,7 +30,7 @@ python3 ops/corpvpn/corpvpn_proxy.py
 
 | Клиент | Формат |
 |--------|--------|
-| Happ | нативный Xray JSON, без `routing` deeplink |
+| Happ | Xray JSON **без** `routing` в узлах + заголовок `routing` (`CORP Route` deeplink) |
 | Throne | base64 `vless://` share links (mlkem + xhttp) |
 | FlClash | Clash YAML |
 
@@ -42,11 +42,13 @@ python3 ops/corpvpn/corpvpn_proxy.py
 
 Слоты имён (`corpvpn-slot-state.json`) для `slovo` **не используются** — можно не удалять файл, но он не влияет на имена.
 
+**Happ (Slovo):** по умолчанию `CORP_HAPP_ROUTING_DEEPLINK=1` — глобальный маршрут через заголовок `routing` (как у LIBERTY), `routing` в JSON каждого сервера удаляется. Так Happ стабильно обновляет подписку и профиль маршрутизации. Отключить: `CORP_HAPP_ROUTING_DEEPLINK=0` (встроенный routing провайдера в узлах, как Iter Portal).
+
 **После перехода с LIBERTY/Blanc:**
 
 1. Выставить `CORP_NAME_MODE=slovo` и новый master URL.
 2. Перезапустить `corpvpn_proxy.py` (или systemd).
-3. В Happ удалить старый «CORP Route», если был сохранён.
+3. В Happ один раз удалить старый «Iter Route» / «CORP Route», если был сохранён ранее — затем обновить подписку.
 4. Обновить подписку во всех клиентах.
 
 `CORP_ROUTE_NAME` / `CORP_BYPASS_RENDER_MODE` актуальны только для режима `liberty`.
@@ -67,7 +69,10 @@ python3 ops/corpvpn/corpvpn_proxy.py
 | `CORP_SLOT_STATE_FILE` | см. скрипт | JSON слотов имён (blanc/liberty) |
 | `CORP_DEACTIVATED` / `CORP_DEACTIVATED_N` | — | Poisoning слота |
 | `CORP_PROFILE_PREFIX` | `CORP VPN` | `profile-title` |
-| `CORP_ROUTE_NAME` | `CORP Route` | Happ routing (только LIBERTY) |
+| `CORP_ROUTE_NAME` | `CORP Route` | Имя Happ routing-профиля (deeplink) |
+| `CORP_HAPP_ROUTING_DEEPLINK` | `1` для `slovo`, иначе `0` | Slovo+Happ: глобальный маршрут в заголовке, без routing в JSON узлов |
+| `CORP_ROUTE_DIRECT_SITES` | — | Свой список `directsites` для deeplink (по строке, префиксы как у Slovo) |
+| `CORP_SLOVO_RU_DIRECT_ROUTES` | — | То же для RU Direct whitelist; при deeplink попадает в `directsites` |
 | `CORP_CLASH_GROUP_NAME` | `CORP VPN` | Clash group |
 
 Состояние слотов по умолчанию: `corpvpn-slot-state.json` рядом со скриптом (Windows) или `/var/lib/corpvpn/slot-state.json` (Linux).

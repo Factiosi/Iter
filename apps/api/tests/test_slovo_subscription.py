@@ -1,3 +1,4 @@
+import base64
 import json
 from unittest.mock import patch
 
@@ -240,6 +241,33 @@ def test_slovo_throne_gets_share_links_with_mlkem():
     assert "mlkem768x25519plus.native.0rtt.test" in lines[0]
     assert "type=xhttp" in lines[1]
     assert "routing" not in headers
+
+
+def test_slovo_happ_deeplink_mode_strips_node_routing_and_adds_header():
+    de = _slovo_vless_config("🇩🇪 Германия · RU сайты работают", address="de.example")
+    de["routing"]["rules"].append(
+        {"type": "field", "outboundTag": "direct", "domain": ["domain:afisha.ru"]},
+    )
+    body = json.dumps([de], ensure_ascii=False)
+
+    with patch("app.subscription.pipeline.fetch_master_subscription_sync", return_value=("application/json", body)):
+        _media, content, headers, _slots = build_subscription_response(
+            "https://sub.example/test",
+            "Happ/1.0",
+            poisoning=False,
+            name_mode="slovo",
+            route_name="CORP Route",
+            happ_routing_deeplink=True,
+            happ_routing_direct_sites=["domain:2ip.ru", "geosite:category-ru"],
+        )
+
+    data = json.loads(content)
+    assert "routing" not in data[0]
+    assert headers["routing"].startswith("happ://routing/add/")
+    route_b64 = headers["routing"].removeprefix("happ://routing/add/")
+    route = json.loads(base64.b64decode(route_b64).decode())
+    assert route["name"] == "CORP Route"
+    assert route["directsites"] == ["domain:2ip.ru", "geosite:category-ru"]
 
 
 def test_slovo_flclash_still_uses_clash_yaml():

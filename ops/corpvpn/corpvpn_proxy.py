@@ -27,7 +27,8 @@ try:
     from app.subscription.display_names import NAME_MODE_SLOVO
     from app.subscription.pipeline import build_subscription_response
     from app.subscription.render import BYPASS_RENDER_SOCKS
-    from app.subscription.ua import OUTPUT_FORMAT_AUTO, resolve_output_format
+    from app.subscription.slovo_ru_direct import parse_slovo_ru_direct_routes
+    from app.subscription.ua import FORMAT_HAPP, OUTPUT_FORMAT_AUTO, resolve_output_format
 except ModuleNotFoundError as exc:
     raise SystemExit(
         "Cannot import Iter subscription modules. Set CORP_APP_PATH to the apps/api directory."
@@ -158,6 +159,24 @@ def _save_state_doc(doc: dict[str, Any]) -> None:
         print(f"Cannot save CORP slot state to {path}: {exc}", file=sys.stderr)
 
 
+def _parse_route_direct_sites(raw: str | None) -> list[str] | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    return parse_slovo_ru_direct_routes(text)
+
+
+def _corp_happ_routing_deeplink(name_mode: str, user_agent: str | None, output_format_mode: str) -> bool:
+    if name_mode == NAME_MODE_SLOVO:
+        default = "1"
+    else:
+        default = "0"
+    if not _truthy(os.environ.get("CORP_HAPP_ROUTING_DEEPLINK", default)):
+        return False
+    fmt = resolve_output_format(user_agent, output_format_mode)
+    return fmt == FORMAT_HAPP
+
+
 def _build_response(slot: int, user_agent: str | None) -> CachedResponse:
     master_url = _master_url_for_slot(slot)
     name_mode = os.environ.get("CORP_NAME_MODE", NAME_MODE_BLANC).strip() or NAME_MODE_BLANC
@@ -167,6 +186,9 @@ def _build_response(slot: int, user_agent: str | None) -> CachedResponse:
     route_name = os.environ.get("CORP_ROUTE_NAME", DEFAULT_ROUTE_NAME).strip() or DEFAULT_ROUTE_NAME
     clash_group_name = os.environ.get("CORP_CLASH_GROUP_NAME", DEFAULT_CLASH_GROUP_NAME).strip() or DEFAULT_CLASH_GROUP_NAME
     deactivated = _truthy(os.environ.get(f"CORP_DEACTIVATED_{slot}")) or _truthy(os.environ.get("CORP_DEACTIVATED"))
+    happ_routing_deeplink = _corp_happ_routing_deeplink(name_mode, user_agent, output_format_mode)
+    happ_routing_direct_sites = _parse_route_direct_sites(os.environ.get("CORP_ROUTE_DIRECT_SITES"))
+    slovo_ru_direct_override = _parse_route_direct_sites(os.environ.get("CORP_SLOVO_RU_DIRECT_ROUTES"))
 
     fmt = resolve_output_format(user_agent, output_format_mode)
     cache_key = (
@@ -180,6 +202,9 @@ def _build_response(slot: int, user_agent: str | None) -> CachedResponse:
         route_name,
         clash_group_name,
         deactivated,
+        happ_routing_deeplink,
+        tuple(happ_routing_direct_sites or ()),
+        tuple(slovo_ru_direct_override or ()),
     )
     now = time.time()
     ttl = _cache_ttl()
@@ -206,6 +231,9 @@ def _build_response(slot: int, user_agent: str | None) -> CachedResponse:
             slot_state=slot_state,
             route_name=route_name,
             clash_group_name=clash_group_name,
+            slovo_ru_direct_routes_override=slovo_ru_direct_override,
+            happ_routing_deeplink=happ_routing_deeplink,
+            happ_routing_direct_sites=happ_routing_direct_sites,
         )
         if name_mode != NAME_MODE_SLOVO and state_doc is not None:
             state_doc[str(slot)] = next_slot_state

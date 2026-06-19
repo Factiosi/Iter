@@ -46,6 +46,8 @@ def build_subscription_response(
     route_name: str = "Iter Route",
     clash_group_name: str = "Iter VPN",
     slovo_ru_direct_routes_override: list[str] | None = None,
+    happ_routing_deeplink: bool = False,
+    happ_routing_direct_sites: list[str] | None = None,
 ) -> tuple[str, str, dict[str, str], ServerSlotState]:
     """
     Загрузка мастер-подписки (UA фиксирован в fetch) → парсинг → имена или отзыв →
@@ -78,11 +80,22 @@ def build_subscription_response(
                     body,
                     nodes,
                     filter_fn=filter_fn,
-                    strip_routing=False,
-                    slovo_ru_direct_routes=slovo_ru_direct_routes_override,
+                    strip_routing=happ_routing_deeplink,
+                    slovo_ru_direct_routes=None
+                    if happ_routing_deeplink
+                    else slovo_ru_direct_routes_override,
                 )
                 if xray_json is not None:
                     headers = build_subscription_headers(deactivated=False, fmt=fmt)
+                    if happ_routing_deeplink:
+                        direct_sites = _resolve_happ_direct_sites(
+                            happ_routing_direct_sites,
+                            slovo_ru_direct_routes_override,
+                        )
+                        headers["routing"] = _happ_route_deeplink(
+                            route_name,
+                            direct_sites=direct_sites,
+                        )
                     return "application/json; charset=utf-8", xray_json, headers, slots
             if name_mode == NAME_MODE_SLOVO and fmt == FORMAT_THRONE:
                 headers = build_subscription_headers(deactivated=False, fmt=fmt)
@@ -164,7 +177,25 @@ def _render_xray_json_subscription(
     return json.dumps(out, ensure_ascii=False, separators=(",", ":"))
 
 
-def _happ_route_deeplink(name: str = "Iter Route") -> str:
+_DEFAULT_HAPP_DIRECT_SITES = ("domain:.ru", "domain:.xn--p1ai", "geosite:category-ru")
+
+
+def _resolve_happ_direct_sites(
+    explicit: list[str] | None,
+    slovo_override: list[str] | None,
+) -> list[str]:
+    if slovo_override:
+        return list(slovo_override)
+    if explicit:
+        return list(explicit)
+    return list(_DEFAULT_HAPP_DIRECT_SITES)
+
+
+def _happ_route_deeplink(
+    name: str = "Iter Route",
+    *,
+    direct_sites: list[str] | None = None,
+) -> str:
     route = {
         "blockip": [],
         "blocksites": [],
@@ -176,7 +207,7 @@ def _happ_route_deeplink(name: str = "Iter Route") -> str:
             "224.0.0.0/4",
             "255.255.255.255",
         ],
-        "directsites": ["domain:.ru", "domain:.xn--p1ai", "geosite:category-ru"],
+        "directsites": direct_sites or list(_DEFAULT_HAPP_DIRECT_SITES),
         "dnshosts": {"cloudflare-dns.com": "1.1.1.1", "dns.google": "8.8.8.8"},
         "domainstrategy": "IPIfNonMatch",
         "domesticdnsdomain": "https://dns.google/dns-query",
